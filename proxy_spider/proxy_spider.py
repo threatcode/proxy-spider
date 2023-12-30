@@ -40,7 +40,7 @@ from .proxy import Proxy
 logger = logging.getLogger(__name__)
 
 
-class ProxyScraperChecker:
+class ProxySpider:
     """HTTP, SOCKS4, SOCKS5 proxies scraper and checker."""
 
     __slots__ = (
@@ -402,7 +402,7 @@ class ProxyScraperChecker:
 
         logger.info(
             "Thank you for using "
-            "https://github.com/threatcode/proxy-spider :)"
+            "https://github.com/threatmap/proxy-spider :)"
         )
 
     def get_sorted_proxies(self) -> Dict[ProxyType, List[Proxy]]:

@@ -8,7 +8,7 @@ concurrency:
 jobs:
   auto-merge-updates:
     runs-on: ubuntu-latest
-    if: ${{ github.actor == 'threatcode' && startsWith(github.head_ref, 'update/') }}
+    if: ${{ github.actor == 'threatmap' && startsWith(github.head_ref, 'update/') }}
     steps:
       - run: gh pr merge --auto --delete-branch --squash "${PR_URL}"
         env:

@@ -9,7 +9,7 @@ import rich.traceback
 from rich.console import Console
 from rich.logging import RichHandler
 
-from .proxy_spider import ProxyScraperChecker
+from .proxy_spider import ProxySpider
 
 
 def set_event_loop_policy() -> None:
@@ -59,7 +59,7 @@ async def main() -> None:
     console = Console()
     configure_logging(console, debug=cfg["General"].getboolean("Debug", False))
 
-    await ProxyScraperChecker.from_configparser(cfg, console=console).run()
+    await ProxySpider.from_configparser(cfg, console=console).run()
 
 
 if __name__ == "__main__":
