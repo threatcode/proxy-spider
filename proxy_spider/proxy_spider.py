@@ -402,7 +402,7 @@ class ProxySpider:
 
         logger.info(
             "Thank you for using "
-            "https://github.com/threatmap/proxy-spider :)"
+            "https://github.com/threatcode/proxy-spider :)"
         )
 
     def get_sorted_proxies(self) -> Dict[ProxyType, List[Proxy]]:

@@ -1,6 +1,6 @@
 # proxy-spider
 
-[![CI](https://github.com/threatmap/proxy-spider/actions/workflows/ci.yml/badge.svg)](https://github.com/threatmap/proxy-spider/actions/workflows/ci.yml)
+[![CI](https://github.com/threatcode/proxy-spider/actions/workflows/ci.yml/badge.svg)](https://github.com/threatcode/proxy-spider/actions/workflows/ci.yml)
 
 ![Screenshot](screenshot.png)
 
@@ -13,13 +13,13 @@ HTTP, SOCKS4, SOCKS5 proxies scraper and checker.
 - Supports determining the geolocation of the proxy exit node.
 - Can determine if the proxy is anonymous.
 
-You can get proxies obtained using this script in [threatmap/proxy-list](https://github.com/threatmap/proxy-list).
+You can get proxies obtained using this script in [threatcode/proxy-list](https://github.com/threatcode/proxy-list).
 
 ## Installation and usage
 
 ### Desktop
 
-- Download and unpack [the archive with the program](https://github.com/threatmap/proxy-spider/archive/refs/heads/main.zip).
+- Download and unpack [the archive with the program](https://github.com/threatcode/proxy-spider/archive/refs/heads/main.zip).
 - Edit `config.ini` to your preference.
 - Install [Python](https://python.org/downloads) (minimum required version is 3.7).
 - Run the script that installs dependencies and starts `proxy-spider`:
@@ -33,7 +33,7 @@ To use `proxy-spider` in Termux, knowledge of the Unix command-line interface is
 - Download Termux from [F-Droid](https://f-droid.org/en/packages/com.termux/). [Don't download it from Google Play](https://github.com/termux/termux-app#google-play-store-deprecated).
 - Run the following command (it will automatically update Termux packages, install Python, and download and install `proxy-spider`):
   ```bash
-  bash <(curl -fsSL 'https://raw.githubusercontent.com/threatmap/proxy-spider/main/install-termux.sh')
+  bash <(curl -fsSL 'https://raw.githubusercontent.com/threatcode/proxy-spider/main/install-termux.sh')
   ```
 - Edit `~/proxy-spider/config.ini` to your preference using a text editor (vim/nano).
 - To run `proxy-spider` use the following command:
