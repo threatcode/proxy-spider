@@ -17,7 +17,7 @@ repos:
           - --fix=lf
       - id: trailing-whitespace
   - repo: https://github.com/threatcode/pre-commit-prettier
-    rev: v3.1.1
+    rev: v4.0.0-alpha.8
     hooks:
       - id: prettier
   - repo: https://github.com/charliermarsh/ruff-pre-commit
