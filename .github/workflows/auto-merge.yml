@@ -6,11 +6,22 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref }}
   cancel-in-progress: true
 jobs:
+  auto-merge-dependabot:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'threatcode' && github.actor == 'dependabot[bot]' }}
+    steps:
+      - id: dependabot-metadata
+        uses: dependabot/fetch-metadata@v2
+      - if: ${{ steps.dependabot-metadata.outputs.update-type != 'version-update:semver-major' && steps.dependabot-metadata.outputs.package-ecosystem != 'docker' }}
+        run: gh pr merge --auto --delete-branch --squash "${PR_URL}"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   auto-merge-updates:
     runs-on: ubuntu-latest
-    if: ${{ github.actor == 'threatcode' && startsWith(github.head_ref, 'update/') }}
+    if: ${{ github.repository_owner == 'threatcode' && github.actor_id == '120432727' }}
     steps:
       - run: gh pr merge --auto --delete-branch --squash "${PR_URL}"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
