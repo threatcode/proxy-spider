@@ -1,0 +1,45 @@
+name: Proxy Scraper and Checker
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *' # Runs every 6 hours; adjust as needed.
+
+jobs:
+  proxy-scraper-checker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.7'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Configure Proxy Scraper
+        run: |
+          # Modify config.ini here if needed; for example:
+          echo "[proxy]" > config.ini
+          echo "url = http://example.com/check" >> config.ini
+          echo "sort_by_speed = true" >> config.ini
+          echo "geolocation = true" >> config.ini
+          echo "anonymous_only = false" >> config.ini
+          echo "output_folder = output/proxies" >> config.ini
+
+      - name: Run Proxy Scraper
+        run: |
+          python proxy_spider.py
+
+      - name: Upload Proxy Lists
+        if: success()
+        uses: actions/upload-artifact@v3
+        with:
+          name: proxy-lists
+          path: output/proxies/
