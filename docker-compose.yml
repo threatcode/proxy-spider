@@ -1,0 +1,15 @@
+services:
+  app:
+    image: proxy_spider
+    build:
+      context: .
+      args:
+        - GID=${GID:-1000}
+        - UID=${UID:-1000}
+    tty: true
+    volumes:
+      - proxy_spider_cache:/home/app/.cache/proxy_spider
+      - ./out:/home/app/.local/share/proxy_spider
+      - ./config.toml:/app/config.toml
+volumes:
+  proxy_spider_cache:

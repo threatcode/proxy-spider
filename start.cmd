@@ -1,4 +1,3 @@
-py -m pip install -U --no-cache-dir --disable-pip-version-check pip setuptools wheel
-py -m pip install -U --no-cache-dir --disable-pip-version-check -r requirements.txt
-py -m proxy_spider
-Pause
+py -m venv --upgrade-deps .venv
+.venv\Scripts\python.exe -m pip install -U --disable-pip-version-check --editable .[non-termux]
+.venv\Scripts\python.exe -m proxy_spider
