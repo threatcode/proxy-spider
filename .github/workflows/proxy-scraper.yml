@@ -39,7 +39,7 @@ jobs:
 
       - name: Upload Proxy Lists
         if: success()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: proxy-lists
           path: output/proxies/
