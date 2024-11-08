@@ -13,16 +13,26 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
         with:
-          python-version: "3.7"
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          check-latest: true
 
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install poetry
-          poetry install
+      - run: uv run --extra non-termux --no-dev --group nuitka --frozen --python 3.12 python -m nuitka --standalone --python-flag='-m' --assume-yes-for-downloads --lto=yes proxy_spider
+      - run: mv config.toml proxy_spider.dist/
+      - if: ${{ github.event_name != 'pull_request' }}
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: proxy_spider.dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: artifact-${{ matrix.name }}
+          path: proxy_spider.dist/
+          if-no-files-found: error
 
       - name: Configure Proxy Scraper
         run: |
@@ -36,7 +46,8 @@ jobs:
 
       - name: Run Proxy Scraper
         run: |
-          poetry run python proxy_spider.py
+          sudo chmod +x start.sh
+          bash start.sh
 
       - name: Push .out Directory to Proxy List Repository
         if: success()
