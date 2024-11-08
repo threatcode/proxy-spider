@@ -43,11 +43,11 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git clone https://github.com/username/proxy-list.git proxy-list-repo
+          git clone https://github.com/threatcode/proxy-list.git proxy-list-repo
           cp -r .out/* proxy-list-repo/
           cd proxy-list-repo
           git add .
           git commit -m "Update proxy list from workflow"
-          git push https://$PROXY_LIST_REPO_TOKEN@github.com/username/proxy-list.git main
+          git push https://$GITHUB_TOKEN@github.com/threatcode/proxy-list.git main
         env:
-          PROXY_LIST_REPO_TOKEN: ${{ secrets.PROXY_LIST_REPO_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
