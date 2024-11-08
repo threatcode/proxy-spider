@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import ssl
-from functools import lru_cache
+from functools import cache
 from types import MappingProxyType
+from typing import TYPE_CHECKING
 
 import certifi
-from aiohttp import ClientResponse, DummyCookieJar, hdrs
+from aiohttp import DummyCookieJar, hdrs
 
 from .utils import bytes_decode
 
+if TYPE_CHECKING:
+    from aiohttp import ClientResponse
+
 HEADERS: MappingProxyType[str, str] = MappingProxyType({
     hdrs.USER_AGENT: (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"  # noqa: E501
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"  # noqa: E501
     )
 })
 SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
@@ -25,7 +29,7 @@ def fallback_charset_resolver(r: ClientResponse, b: bytes) -> str:  # noqa: ARG0
     raise NoCharsetHeaderError
 
 
-@lru_cache(None)
+@cache
 def get_cookie_jar() -> DummyCookieJar:
     return DummyCookieJar()
 

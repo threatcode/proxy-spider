@@ -1,6 +1,6 @@
 line-length = 80
 preview = true
-target-version = "py38"
+target-version = "py39"
 
 [format]
 docstring-code-format = true
@@ -9,7 +9,9 @@ skip-magic-trailing-comma = true
 
 [lint]
 ignore = [
+  "A005",
   "ANN401",
+  "ASYNC109",
   "BLE001",
   "C901",
   "COM812",
@@ -22,9 +24,13 @@ ignore = [
   "D105",
   "D106",
   "D107",
+  "D403",
   "D415",
   "D417",
   "DJ008",
+  "DOC201",
+  "DOC402",
+  "DOC501",
   "FURB180",
   "ISC001",
   "PLR0904",
@@ -35,6 +41,7 @@ ignore = [
   "PLR0915",
   "PLR0916",
   "PLR0917",
+  "PLR1702",
   "RUF001",
   "RUF002",
   "RUF003",
@@ -42,18 +49,22 @@ ignore = [
   "S112",
   "S308",
   "S311",
+  "S404",
   "SIM105",
-  "TCH001",
-  "TCH002",
-  "TCH003",
+  "TD002",
+  "TD003",
   "TID252",
   "TRY400",
 ]
-ignore-init-module-imports = true
 select = ["ALL"]
+unfixable = ["RUF027", "T"]
 
 [lint.flake8-self]
-ignore-names = []
+ignore-names = ["_name_", "_value_"]
+
+[lint.flake8-type-checking]
+exempt-modules = []
+strict = true
 
 [lint.isort]
 combine-as-imports = true
@@ -62,6 +73,3 @@ split-on-trailing-comma = false
 
 [lint.pydocstyle]
 convention = "google"
-
-[lint.pyupgrade]
-keep-runtime-typing = true

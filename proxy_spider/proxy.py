@@ -3,11 +3,11 @@ from __future__ import annotations
 import json
 from io import StringIO
 from time import perf_counter
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import attrs
 from aiohttp import ClientSession
-from aiohttp_socks import ProxyConnector, ProxyType
+from aiohttp_socks import ProxyConnector
 
 from .http import (
     HEADERS,
@@ -17,7 +17,12 @@ from .http import (
     get_response_text,
 )
 from .parsers import parse_ipv4
-from .settings import CheckWebsiteType, Settings
+from .settings import CheckWebsiteType
+
+if TYPE_CHECKING:
+    from aiohttp_socks import ProxyType
+
+    from .settings import Settings
 
 
 @attrs.define(
@@ -32,10 +37,14 @@ class Proxy:
     protocol: ProxyType
     host: str
     port: int
-    username: Optional[str]
-    password: Optional[str]
-    timeout: float = attrs.field(init=False, eq=False)
-    exit_ip: Optional[str] = attrs.field(init=False, eq=False)
+    username: str | None
+    password: str | None
+    timeout: float | None = attrs.field(default=None, init=False, eq=False)
+    exit_ip: str | None = attrs.field(default=None, init=False, eq=False)
+
+    @property
+    def is_checked(self) -> bool:
+        return self.timeout is not None
 
     async def check(self, *, settings: Settings) -> None:
         async with settings.semaphore:
@@ -48,14 +57,20 @@ class Proxy:
                 password=self.password,
                 ssl=SSL_CONTEXT,
             )
-            async with ClientSession(
-                connector=connector,
-                headers=HEADERS,
-                cookie_jar=get_cookie_jar(),
-                raise_for_status=True,
-                timeout=settings.timeout,
-                fallback_charset_resolver=fallback_charset_resolver,
-            ) as session, session.get(settings.check_website) as response:
+            async with (
+                ClientSession(
+                    connector=connector,
+                    headers=HEADERS,
+                    cookie_jar=get_cookie_jar(),
+                    raise_for_status=True,
+                    timeout=settings.timeout,
+                    fallback_charset_resolver=fallback_charset_resolver,
+                ) as session,
+                session.get(
+                    settings.check_website,
+                    headers=settings.check_website_type.headers,
+                ) as response,
+            ):
                 content = await response.read()
         self.timeout = perf_counter() - start
         if settings.check_website_type == CheckWebsiteType.HTTPBIN_IP:

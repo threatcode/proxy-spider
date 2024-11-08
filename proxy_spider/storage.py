@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import itertools
 from collections import Counter
-from typing import Dict, Iterable, Iterator, Set, Tuple
-
-from aiohttp_socks import ProxyType
+from typing import TYPE_CHECKING
 
 from . import sort
-from .proxy import Proxy
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
+
+    from aiohttp_socks import ProxyType
+
+    from .proxy import Proxy
 
 
 class ProxyStorage:
@@ -15,7 +19,7 @@ class ProxyStorage:
 
     def __init__(self, *, protocols: Iterable[ProxyType]) -> None:
         self.enabled_protocols = set(protocols)
-        self._proxies: Set[Proxy] = set()
+        self._proxies: set[Proxy] = set()
 
     def add(self, proxy: Proxy, /) -> None:
         self.enabled_protocols.add(proxy.protocol)
@@ -24,7 +28,7 @@ class ProxyStorage:
     def remove(self, proxy: Proxy, /) -> None:
         self._proxies.remove(proxy)
 
-    def get_grouped(self) -> Dict[ProxyType, Tuple[Proxy, ...]]:
+    def get_grouped(self) -> dict[ProxyType, tuple[Proxy, ...]]:
         key = sort.protocol_sort_key
         return {
             **{
@@ -40,7 +44,7 @@ class ProxyStorage:
             },
         }
 
-    def get_count(self) -> Dict[ProxyType, int]:
+    def get_count(self) -> dict[ProxyType, int]:
         return {
             **{
                 proto: 0
@@ -49,6 +53,11 @@ class ProxyStorage:
             },
             **Counter(proxy.protocol for proxy in self),
         }
+
+    def remove_unchecked(self) -> None:
+        for p in self._proxies.copy():
+            if not p.is_checked:
+                self._proxies.remove(p)
 
     def __iter__(self) -> Iterator[Proxy]:
         return iter(self._proxies)

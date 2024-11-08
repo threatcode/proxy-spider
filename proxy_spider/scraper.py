@@ -3,20 +3,25 @@ from __future__ import annotations
 import asyncio
 import itertools
 import logging
+from typing import TYPE_CHECKING
 
 import aiofiles
-from aiohttp import ClientResponseError, ClientSession, ClientTimeout
+from aiohttp import ClientResponseError, ClientTimeout
 from aiohttp_socks import ProxyType
-from rich.progress import Progress, TaskID
 
 from .http import get_response_text
 from .parsers import PROXY_REGEX
 from .proxy import Proxy
-from .settings import Settings
-from .storage import ProxyStorage
 from .utils import bytes_decode, is_http_url
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from aiohttp import ClientSession
+    from rich.progress import Progress, TaskID
+
+    from .settings import Settings
+    from .storage import ProxyStorage
+
+_logger = logging.getLogger(__name__)
 
 
 async def scrape_one(
@@ -39,11 +44,11 @@ async def scrape_one(
                 content = await f.read()
             text = bytes_decode(content)
     except ClientResponseError as e:
-        logger.warning(
+        _logger.warning(
             "%s | HTTP status code %d: %s", source, e.status, e.message
         )
     except Exception as e:
-        logger.warning(
+        _logger.warning(
             "%s | %s.%s: %s",
             source,
             e.__class__.__module__,
@@ -55,7 +60,7 @@ async def scrape_one(
         try:
             proxy = next(proxies)
         except StopIteration:
-            logger.warning("%s | No proxies found", source)
+            _logger.warning("%s | No proxies found", source)
         else:
             for proxy in itertools.chain((proxy,), proxies):  # noqa: B020
                 try:

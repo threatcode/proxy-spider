@@ -8,24 +8,14 @@ import math
 import stat
 import sys
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-    Callable,
-    Dict,
-    FrozenSet,
-    Iterable,
-    Mapping,
-    Optional,
-    Tuple,
-    Union,
-)
+from types import MappingProxyType
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import attrs
 import platformdirs
-from aiohttp import ClientSession, ClientTimeout
+from aiohttp import ClientTimeout, hdrs
 from aiohttp_socks import ProxyType
-from typing_extensions import Any, Literal, Self
 
 from . import fs, sort
 from .http import get_response_text
@@ -34,12 +24,18 @@ from .parsers import parse_ipv4
 from .utils import IS_DOCKER
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
+    from typing import Callable
+
+    from aiohttp import ClientSession
+    from typing_extensions import Any, Literal, Self
+
     from .proxy import Proxy
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 
-def _get_supported_max_connections() -> Optional[int]:
+def _get_supported_max_connections() -> int | None:
     if sys.platform == "win32":
         if isinstance(
             asyncio.get_event_loop_policy(),
@@ -47,10 +43,10 @@ def _get_supported_max_connections() -> Optional[int]:
         ):
             return 512
         return None
-    import resource  # noqa: PLC0415
+    import resource  # type: ignore[unreachable, unused-ignore]  # noqa: PLC0415
 
     soft_limit, hard_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
-    logger.debug(
+    _logger.debug(
         "max_connections: soft limit = %d, hard limit = %d, infinity = %d",
         soft_limit,
         hard_limit,
@@ -60,7 +56,7 @@ def _get_supported_max_connections() -> Optional[int]:
         try:
             resource.setrlimit(resource.RLIMIT_NOFILE, (hard_limit, hard_limit))
         except ValueError as e:
-            logger.warning("Failed setting max_connections: %s", e)
+            _logger.warning("Failed setting max_connections: %s", e)
         else:
             soft_limit = hard_limit
     if soft_limit == resource.RLIM_INFINITY:
@@ -68,17 +64,17 @@ def _get_supported_max_connections() -> Optional[int]:
     return soft_limit
 
 
-def _get_max_connections(value: int, /) -> Optional[int]:
+def _get_max_connections(value: int, /) -> int | None:
     if value < 0:
         msg = "max_connections must be non-negative"
         raise ValueError(msg)
     max_supported = _get_supported_max_connections()
     if not value:
-        logger.info("Using %d as max_connections value", max_supported or 0)
+        _logger.info("Using %d as max_connections value", max_supported or 0)
         return max_supported
     if not max_supported or value <= max_supported:
         return value
-    logger.warning(
+    _logger.warning(
         "max_connections value is too high for your OS. "
         "The config value will be ignored and %d will be used.%s",
         max_supported,
@@ -91,9 +87,7 @@ def _get_max_connections(value: int, /) -> Optional[int]:
     return max_supported
 
 
-def _semaphore_converter(
-    value: int, /
-) -> Union[asyncio.Semaphore, NullContext]:
+def _semaphore_converter(value: int, /) -> asyncio.Semaphore | NullContext:
     v = _get_max_connections(value)
     return asyncio.Semaphore(v) if v else NullContext()
 
@@ -103,8 +97,8 @@ def _timeout_converter(value: float, /) -> ClientTimeout:
 
 
 def _sources_converter(
-    value: Mapping[ProxyType, Optional[Iterable[str]]], /
-) -> Dict[ProxyType, FrozenSet[str]]:
+    value: Mapping[ProxyType, Iterable[str] | None], /
+) -> dict[ProxyType, frozenset[str]]:
     return {
         proxy_type: frozenset(sources)
         for proxy_type, sources in value.items()
@@ -113,33 +107,51 @@ def _sources_converter(
 
 
 class CheckWebsiteType(enum.Enum):
-    UNKNOWN = enum.auto()
-    PLAIN_IP = enum.auto()
+    UNKNOWN = enum.auto(), False, False, None
+    PLAIN_IP = enum.auto(), True, True, None
     """https://checkip.amazonaws.com"""
-    HTTPBIN_IP = enum.auto()
+    HTTPBIN_IP = (
+        enum.auto(),
+        True,
+        True,
+        MappingProxyType({hdrs.ACCEPT: "application/json"}),
+    )
     """https://httpbin.org/ip"""
 
-    @property
-    def supports_geolocation(self) -> bool:
-        return self != CheckWebsiteType.UNKNOWN
+    def __init__(
+        self,
+        _: object,
+        supports_geolocation: bool,  # noqa: FBT001
+        supports_anonymity: bool,  # noqa: FBT001
+        headers: Mapping[str, str] | None,
+        /,
+    ) -> None:
+        self.supports_geolocation = supports_geolocation
+        self.supports_anonymity = supports_anonymity
+        self.headers = headers
 
-    @property
-    def supports_anonymity(self) -> bool:
-        return self != CheckWebsiteType.UNKNOWN
+    def __new__(cls, value: object, *_: Any) -> Self:
+        member = object.__new__(cls)
+        member._value_ = value
+        return member
 
 
 async def _get_check_website_type_and_real_ip(
     *, check_website: str, session: ClientSession
-) -> Union[
-    Tuple[Literal[CheckWebsiteType.UNKNOWN], None],
-    Tuple[Literal[CheckWebsiteType.PLAIN_IP, CheckWebsiteType.HTTPBIN_IP], str],
-]:
+) -> (
+    tuple[Literal[CheckWebsiteType.UNKNOWN], None]
+    | tuple[
+        Literal[CheckWebsiteType.PLAIN_IP, CheckWebsiteType.HTTPBIN_IP], str
+    ]
+):
+    if not check_website:
+        return CheckWebsiteType.UNKNOWN, None
     try:
         async with session.get(check_website) as response:
             content = await response.read()
         text = get_response_text(response=response, content=content)
     except Exception:
-        logger.exception(
+        _logger.exception(
             "Error when opening check_website without proxy, it will be "
             "impossible to determine anonymity and geolocation of proxies"
         )
@@ -156,7 +168,7 @@ async def _get_check_website_type_and_real_ip(
             return CheckWebsiteType.HTTPBIN_IP, parse_ipv4(js["origin"])
         except (KeyError, TypeError, ValueError):
             pass
-    logger.warning(
+    _logger.warning(
         "Check_website is not httpbin and does not return plain ip, so it will"
         " be impossible to determine the anonymity and geolocation of proxies"
     )
@@ -186,17 +198,17 @@ class Settings:
     )
     output_path: Path = attrs.field(converter=Path)
     output_txt: bool = attrs.field(validator=attrs.validators.instance_of(bool))
-    real_ip: Optional[str] = attrs.field(
+    real_ip: str | None = attrs.field(
         validator=attrs.validators.optional(attrs.validators.instance_of(str))
     )
-    semaphore: Union[asyncio.Semaphore, NullContext] = attrs.field(
+    semaphore: asyncio.Semaphore | NullContext = attrs.field(
         converter=_semaphore_converter
     )
     sort_by_speed: bool = attrs.field(
         validator=attrs.validators.instance_of(bool)
     )
     source_timeout: float = attrs.field(validator=attrs.validators.gt(0))
-    sources: Dict[ProxyType, FrozenSet[str]] = attrs.field(
+    sources: dict[ProxyType, frozenset[str]] = attrs.field(
         validator=attrs.validators.and_(
             attrs.validators.instance_of(dict),
             attrs.validators.min_len(1),
@@ -220,7 +232,7 @@ class Settings:
     @property
     def sorting_key(
         self,
-    ) -> Union[Callable[[Proxy], float], Callable[[Proxy], Tuple[int, ...]]]:
+    ) -> Callable[[Proxy], float] | Callable[[Proxy], tuple[int, ...]]:
         return (
             sort.timeout_sort_key
             if self.sort_by_speed
@@ -236,23 +248,34 @@ class Settings:
             msg = "geolocation can not be enabled if json output is disabled"
             raise ValueError(msg)
 
+        if not self.check_website and self.sort_by_speed:
+            _logger.warning(
+                "Proxy checking is disabled, so sorting by speed is not"
+                " possible. Alphabetical sorting will be used instead."
+            )
+            self.sort_by_speed = False
+
     @check_website.validator
-    def _validate_check_website(  # noqa: PLR6301
+    def _validate_check_website(
         self,
         attribute: attrs.Attribute[str],  # noqa: ARG002
         value: str,
         /,
     ) -> None:
-        parsed_url = urlparse(value)
-        if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
-            msg = f"invalid check_website: {value}"
-            raise ValueError(msg)
+        if value:
+            parsed_url = urlparse(value)
+            if (
+                parsed_url.scheme not in {"http", "https"}
+                or not parsed_url.netloc
+            ):
+                msg = f"invalid check_website: {value}"
+                raise ValueError(msg)
 
-        if parsed_url.scheme == "http":
-            logger.warning(
-                "check_website uses the http protocol. "
-                "It is recommended to use https for correct checking."
-            )
+            if parsed_url.scheme == "http":
+                _logger.warning(
+                    "check_website uses the http protocol. "
+                    "It is recommended to use https for correct checking."
+                )
 
     @timeout.validator
     def _validate_timeout(
@@ -275,8 +298,10 @@ class Settings:
             else Path(cfg["output"]["path"])
         )
 
-        output_path_future = fs.async_create_or_fix_dir(
-            output_path, permission=stat.S_IXUSR | stat.S_IWUSR
+        output_path_future = asyncio.to_thread(
+            fs.create_or_fix_dir,
+            output_path,
+            permission=stat.S_IXUSR | stat.S_IWUSR,
         )
 
         check_website_type, real_ip = await _get_check_website_type_and_real_ip(
@@ -289,7 +314,8 @@ class Settings:
         )
 
         if enable_geolocation:
-            await fs.async_create_or_fix_dir(
+            await asyncio.to_thread(
+                fs.create_or_fix_dir,
                 fs.CACHE_PATH,
                 permission=stat.S_IRUSR | stat.S_IXUSR | stat.S_IWUSR,
             )

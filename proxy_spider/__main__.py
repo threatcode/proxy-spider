@@ -1,19 +1,20 @@
+# ruff: noqa: E402
 from __future__ import annotations
+
+from . import logs
+
+_logs_listener = logs.configure()
 
 import asyncio
 import logging
 import sys
-from typing import TYPE_CHECKING, Dict, Mapping
+from typing import TYPE_CHECKING
 
 import aiofiles
-import rich.traceback
+import rich
 from aiohttp import ClientSession, TCPConnector
-from aiohttp_socks import ProxyType
-from rich.console import Console
-from rich.logging import RichHandler
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn
 from rich.table import Table
-from typing_extensions import Any
 
 from . import checker, geodb, http, output, scraper, sort, utils
 from .settings import Settings
@@ -29,60 +30,50 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from collections.abc import Coroutine, Mapping
+    from typing import Callable
+
+    from aiohttp_socks import ProxyType
+    from typing_extensions import Any, TypeVar
+
+    T = TypeVar("T")
+
+_logger = logging.getLogger(__name__)
 
 
-def set_event_loop_policy() -> None:
+def get_async_run() -> Callable[[Coroutine[Any, Any, T]], T]:
     if sys.implementation.name == "cpython":
-        if sys.platform in {"cygwin", "win32"}:
+        try:
+            import uvloop  # type: ignore[import-not-found, unused-ignore]  # noqa: PLC0415
+        except ImportError:
+            pass
+        else:
             try:
-                import winloop  # type: ignore[import-not-found]  # noqa: PLC0415
-            except ImportError:
-                pass
-            else:
-                try:
-                    policy = winloop.EventLoopPolicy()
-                except AttributeError:
-                    policy = winloop.WinLoopPolicy()
-                asyncio.set_event_loop_policy(policy)
-                return
-        elif sys.platform in {"darwin", "linux"}:
+                return uvloop.run  # type: ignore[no-any-return, unused-ignore]
+            except AttributeError:
+                uvloop.install()
+                return asyncio.run
+
+        try:
+            import winloop  # type: ignore[import-not-found, unused-ignore]  # noqa: PLC0415
+        except ImportError:
+            pass
+        else:
             try:
-                import uvloop  # noqa: PLC0415
-            except ImportError:
-                pass
-            else:
-                asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-                return
+                return winloop.run  # type: ignore[no-any-return, unused-ignore]
+            except AttributeError:
+                winloop.install()
+                return asyncio.run
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    return asyncio.run
 
 
-async def read_config(file: str, /) -> Dict[str, Any]:
+async def read_config(file: str, /) -> dict[str, Any]:
     async with aiofiles.open(file, "rb") as f:
         content = await f.read()
     return tomllib.loads(utils.bytes_decode(content))
-
-
-def configure_logging(*, console: Console, debug: bool) -> None:
-    rich.traceback.install(
-        console=console, width=None, extra_lines=0, word_wrap=True
-    )
-    logging.basicConfig(
-        format="%(message)s",
-        datefmt=logging.Formatter.default_time_format,
-        level=logging.DEBUG if debug else logging.INFO,
-        handlers=(
-            RichHandler(
-                console=console,
-                omit_repeated_times=False,
-                show_path=False,
-                rich_tracebacks=True,
-                tracebacks_extra_lines=0,
-            ),
-        ),
-        force=True,
-    )
 
 
 def get_summary_table(
@@ -104,64 +95,76 @@ def get_summary_table(
 
 async def main() -> None:
     cfg = await read_config("config.toml")
-    console = Console()
-    configure_logging(console=console, debug=cfg["debug"])
-
-    async with ClientSession(
-        connector=TCPConnector(ssl=http.SSL_CONTEXT),
-        headers=http.HEADERS,
-        cookie_jar=http.get_cookie_jar(),
-        raise_for_status=True,
-        fallback_charset_resolver=http.fallback_charset_resolver,
-    ) as session:
-        settings = await Settings.from_mapping(cfg, session=session)
-        storage = ProxyStorage(protocols=settings.sources)
-        with Progress(
-            TextColumn("[yellow]{task.fields[col1]}"),
-            TextColumn("[red]::"),
-            TextColumn("[green]{task.fields[col2]}"),
-            BarColumn(),
-            MofNCompleteColumn(),
-            console=console,
-            transient=True,
-        ) as progress:
-            scrape = scraper.scrape_all(
-                progress=progress,
-                session=session,
-                settings=settings,
-                storage=storage,
-            )
-            await (
-                asyncio.gather(
-                    geodb.download_geodb(progress=progress, session=session),
-                    scrape,
+    if cfg["debug"]:
+        logging.root.setLevel(logging.DEBUG)
+    should_save = False
+    try:
+        async with ClientSession(
+            connector=TCPConnector(ssl=http.SSL_CONTEXT),
+            headers=http.HEADERS,
+            cookie_jar=http.get_cookie_jar(),
+            raise_for_status=True,
+            fallback_charset_resolver=http.fallback_charset_resolver,
+        ) as session:
+            settings = await Settings.from_mapping(cfg, session=session)
+            storage = ProxyStorage(protocols=settings.sources)
+            with Progress(
+                TextColumn("[yellow]{task.fields[col1]}"),
+                TextColumn("[red]::"),
+                TextColumn("[green]{task.fields[col2]}"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                transient=True,
+            ) as progress:
+                scrape = scraper.scrape_all(
+                    progress=progress,
+                    session=session,
+                    settings=settings,
+                    storage=storage,
                 )
-                if settings.enable_geolocation
-                else scrape
-            )
-            await session.close()
-            count_before_checking = storage.get_count()
-            await checker.check_all(
-                settings=settings,
-                storage=storage,
-                progress=progress,
-                proxies_count=count_before_checking,
+                await (
+                    asyncio.gather(
+                        geodb.download_geodb(
+                            progress=progress, session=session
+                        ),
+                        scrape,
+                    )
+                    if settings.enable_geolocation
+                    else scrape
+                )
+                await session.close()
+                count_before_checking = storage.get_count()
+                should_save = True
+                if settings.check_website:
+                    await checker.check_all(
+                        settings=settings,
+                        storage=storage,
+                        progress=progress,
+                        proxies_count=count_before_checking,
+                    )
+    finally:
+        if should_save:
+            if settings.check_website:
+                storage.remove_unchecked()
+            count_after_checking = storage.get_count()
+            rich.print(
+                get_summary_table(
+                    before=count_before_checking, after=count_after_checking
+                )
             )
 
-    count_after_checking = storage.get_count()
-    console.print(
-        get_summary_table(
-            before=count_before_checking, after=count_after_checking
+            await asyncio.to_thread(
+                output.save_proxies, storage=storage, settings=settings
+            )
+
+        _logger.info(
+            "Thank you for using https://github.com/monosans/proxy-spider"
         )
-    )
-
-    await output.save_proxies(storage=storage, settings=settings)
-
-    logger.info(
-        "Thank you for using https://github.com/threatcode/proxy-spider"
-    )
 
 
 if __name__ == "__main__":
-    set_event_loop_policy()
-    asyncio.run(main())
+    _logs_listener.start()
+    try:
+        get_async_run()(main())
+    finally:
+        _logs_listener.stop()

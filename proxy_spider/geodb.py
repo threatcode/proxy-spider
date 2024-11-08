@@ -3,25 +3,30 @@ from __future__ import annotations
 import asyncio
 import logging
 import stat
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import aiofiles
-from aiohttp import ClientResponse, ClientSession, hdrs
-from rich.progress import Progress, TaskID
+from aiohttp import hdrs
 
 from . import fs
-from .utils import IS_DOCKER, asyncify, bytes_decode
+from .utils import IS_DOCKER, bytes_decode
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from aiohttp import ClientResponse, ClientSession
+    from rich.progress import Progress, TaskID
+
+_logger = logging.getLogger(__name__)
 
 GEODB_URL = "https://raw.githubusercontent.com/P3TERX/GeoLite.mmdb/download/GeoLite2-City.mmdb"
 GEODB_PATH = fs.CACHE_PATH / "geolocation_database.mmdb"
 GEODB_ETAG_PATH = GEODB_PATH.with_suffix(".mmdb.etag")
 
 
-async def _read_etag() -> Optional[str]:
+async def _read_etag() -> str | None:
     try:
-        await fs.async_add_permission(GEODB_ETAG_PATH, stat.S_IRUSR)
+        await asyncio.to_thread(
+            fs.add_permission, GEODB_ETAG_PATH, stat.S_IRUSR
+        )
         async with aiofiles.open(GEODB_ETAG_PATH, "rb") as etag_file:
             content = await etag_file.read()
     except FileNotFoundError:
@@ -29,13 +34,13 @@ async def _read_etag() -> Optional[str]:
     return bytes_decode(content)
 
 
-def _remove_etag() -> asyncio.Future[None]:
-    return asyncify(GEODB_ETAG_PATH.unlink)(missing_ok=True)
+async def _remove_etag() -> None:
+    return await asyncio.to_thread(GEODB_ETAG_PATH.unlink, missing_ok=True)
 
 
 async def _save_etag(etag: str, /) -> None:
-    await fs.async_add_permission(
-        GEODB_ETAG_PATH, stat.S_IWUSR, missing_ok=True
+    await asyncio.to_thread(
+        fs.add_permission, GEODB_ETAG_PATH, stat.S_IWUSR, missing_ok=True
     )
     async with aiofiles.open(
         GEODB_ETAG_PATH, "w", encoding="utf-8"
@@ -46,7 +51,9 @@ async def _save_etag(etag: str, /) -> None:
 async def _save_geodb(
     *, progress: Progress, response: ClientResponse, task: TaskID
 ) -> None:
-    await fs.async_add_permission(GEODB_PATH, stat.S_IWUSR, missing_ok=True)
+    await asyncio.to_thread(
+        fs.add_permission, GEODB_PATH, stat.S_IWUSR, missing_ok=True
+    )
     async with aiofiles.open(GEODB_PATH, "wb") as geodb:
         async for chunk in response.content.iter_any():
             await geodb.write(chunk)
@@ -56,14 +63,14 @@ async def _save_geodb(
 async def download_geodb(*, progress: Progress, session: ClientSession) -> None:
     headers = (
         {hdrs.IF_NONE_MATCH: current_etag}
-        if await asyncify(GEODB_PATH.exists)()
+        if await asyncio.to_thread(GEODB_PATH.exists)
         and (current_etag := await _read_etag())
         else None
     )
 
     async with session.get(GEODB_URL, headers=headers) as response:
         if response.status == 304:  # noqa: PLR2004
-            logger.info(
+            _logger.info(
                 "Latest geolocation database is already cached at %s",
                 GEODB_PATH,
             )
@@ -80,13 +87,13 @@ async def download_geodb(*, progress: Progress, session: ClientSession) -> None:
         )
 
     if IS_DOCKER:
-        logger.info(
+        _logger.info(
             "Downloaded geolocation database to proxy_spider_cache "
             "Docker volume (%s in container)",
             GEODB_PATH,
         )
     else:
-        logger.info("Downloaded geolocation database to %s", GEODB_PATH)
+        _logger.info("Downloaded geolocation database to %s", GEODB_PATH)
 
     if etag := response.headers.get(hdrs.ETAG):
         await _save_etag(etag)

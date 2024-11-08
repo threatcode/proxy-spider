@@ -14,4 +14,4 @@ curl -fsSLo "${download_path}" "https://github.com/threatcode/${project_name}/ar
 unzip -d "${base_path}" "${download_path}"
 rm -f "${download_path}"
 mv "${install_path}-main" "${install_path}"
-printf "%s installed successfully.\nRun 'cd %s && sh start-termux.sh'.\n" "${project_name}" "${install_path}"
+printf "%s installed successfully.\nRun 'cd %s && sh ./scripts/start-termux.sh'.\n" "${project_name}" "${install_path}"

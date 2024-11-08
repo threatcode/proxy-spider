@@ -1,4 +1,4 @@
 **
 !proxy_spider/**/*.py
-!poetry.lock
 !pyproject.toml
+!uv.lock

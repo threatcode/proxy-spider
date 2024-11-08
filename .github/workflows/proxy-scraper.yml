@@ -6,7 +6,7 @@ on:
     - cron: "0 */6 * * *" # Runs every 6 hours; adjust as needed.
 
 jobs:
-  proxy-scraper-checker:
+  proxy-spider:
     runs-on: ubuntu-latest
 
     steps:
