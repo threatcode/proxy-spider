@@ -1,39 +1,44 @@
 name: Update dependencies
+
 on:
   workflow_dispatch:
   schedule:
-    - cron: 30 1 * * *
+    - cron: "30 1 * * *"
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
   update-dependencies:
-    runs-on: ubuntu-latest
     if: ${{ github.repository_owner == 'threatcode' }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - cmd: pipx run poetry lock --no-interaction
-            commit-msg: Update poetry.lock
-            branch: update/poetry-lock
+          - cmd: uv dep update --all
+            commit-msg: Update dependencies
+            branch: update/dependencies
           - cmd: pipx run pre-commit autoupdate
             commit-msg: Update .pre-commit-config.yaml
             branch: update/pre-commit-config
       fail-fast: false
+
     steps:
       - uses: actions/checkout@v4
+
       - run: ${{ matrix.cmd }}
-      - id: generate-token
-        uses: tibdex/github-app-token@v2
-        with:
-          app_id: ${{ secrets.APP_ID }}
-          private_key: ${{ secrets.PRIVATE_KEY }}
+        shell: bash
+
       - uses: peter-evans/create-pull-request@v7
         with:
-          token: ${{ steps.generate-token.outputs.token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: ${{ matrix.commit-msg }}
           author: github-actions[bot] <120432727+github-actions[bot]@users.noreply.github.com>
           branch: ${{ matrix.branch }}
           delete-branch: true
           title: ${{ matrix.commit-msg }}
-          body:
+          body: |
+            This pull request updates the following:
+            - Project dependencies using `uv`
+            - Pre-commit configuration
