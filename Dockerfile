@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM docker.io/python:3.12-slim-bookworm AS python-base-stage
+FROM docker.io/python:3.13-slim-bookworm AS python-base-stage
 
 ENV \
   PYTHONDONTWRITEBYTECODE=1 \
@@ -24,7 +24,7 @@ RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
   --mount=type=cache,target=/root/.cache/uv,sharing=locked \
   --mount=source=pyproject.toml,target=pyproject.toml \
   --mount=source=uv.lock,target=uv.lock \
-  uv sync --extra non-termux --no-dev --no-install-project --frozen
+  uv sync --no-dev --no-install-project --frozen
 
 
 FROM python-base-stage AS python-run-stage
@@ -41,8 +41,6 @@ RUN apt-get update \
 COPY --from=python-build-stage --chown=1000:1000 --link /app/.venv /app/.venv
 
 ENV PATH="/app/.venv/bin:$PATH"
-
-ENV IS_DOCKER=1
 
 USER app
 
