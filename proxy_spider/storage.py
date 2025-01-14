@@ -4,14 +4,14 @@ import itertools
 from collections import Counter
 from typing import TYPE_CHECKING
 
-from . import sort
+from proxy_spider import sort
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
     from aiohttp_socks import ProxyType
 
-    from .proxy import Proxy
+    from proxy_spider.proxy import Proxy
 
 
 class ProxyStorage:

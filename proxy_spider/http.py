@@ -8,14 +8,16 @@ from typing import TYPE_CHECKING
 import certifi
 from aiohttp import DummyCookieJar, hdrs
 
-from .utils import bytes_decode
+from proxy_spider.utils import bytes_decode
 
 if TYPE_CHECKING:
+    from typing import NoReturn
+
     from aiohttp import ClientResponse
 
 HEADERS: MappingProxyType[str, str] = MappingProxyType({
     hdrs.USER_AGENT: (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"  # noqa: E501
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"  # noqa: E501
     )
 })
 SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
@@ -25,7 +27,7 @@ class NoCharsetHeaderError(Exception):
     pass
 
 
-def fallback_charset_resolver(r: ClientResponse, b: bytes) -> str:  # noqa: ARG001
+def fallback_charset_resolver(_r: ClientResponse, _b: bytes) -> NoReturn:
     raise NoCharsetHeaderError
 
 

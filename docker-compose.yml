@@ -1,6 +1,8 @@
 services:
   app:
     build: .
+    logging:
+      driver: local
     tty: true
     volumes:
       - proxy_spider_cache:/home/app/.cache/proxy_spider
