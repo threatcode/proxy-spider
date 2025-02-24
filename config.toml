@@ -115,8 +115,7 @@ sources = [
     "https://raw.githubusercontent.com/vakhov/fresh-proxy-list/master/socks4.txt",
     "https://raw.githubusercontent.com/Vann-Dev/proxy-list/main/proxies/socks4.txt",
     "https://raw.githubusercontent.com/Zaeem20/FREE_PROXIES_LIST/master/socks4.txt",
-    "https://raw.githubusercontent.com/zevtyardt/proxy-list/main/socks4.txt",
-    "https://www.proxy-list.download/api/v1/get?type=socks4",
+    "https://raw.githubusercontent.com/zevtyardt/proxy-list/main/socks4.txt"
 ]
 
 [socks5]
@@ -147,6 +146,5 @@ sources = [
     "https://raw.githubusercontent.com/tuanminpay/live-proxy/master/socks5.txt",
     "https://raw.githubusercontent.com/vakhov/fresh-proxy-list/master/socks5.txt",
     "https://raw.githubusercontent.com/zevtyardt/proxy-list/main/socks5.txt",
-    "https://raw.githubusercontent.com/zloi-user/hideip.me/main/socks5.txt",
     "https://www.proxy-list.download/api/v1/get?type=socks5",
 ]
