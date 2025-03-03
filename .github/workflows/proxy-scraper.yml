@@ -61,4 +61,4 @@ jobs:
           git commit -m "Update proxy list from workflow"
           git push https://$GITHUB_TOKEN@github.com/threatcode/proxy-list.git main
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ secrets.GITHUB_TOKEN }}
