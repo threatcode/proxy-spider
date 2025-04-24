@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v6
       - run: uv tool run --from pre-commit@latest --with pre-commit-uv --no-cache --python 3.12 pre-commit run --all-files
   build:
     strategy:
@@ -34,7 +34,7 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
       - uses: actions/setup-python@v5
