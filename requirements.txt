@@ -4,7 +4,7 @@ aiofiles==24.1.0
     # via proxy-spider (pyproject.toml)
 aiohappyeyeballs==2.4.4
     # via aiohttp
-aiohttp==3.11.11
+aiohttp==3.12.14
     # via
     #   proxy-spider (pyproject.toml)
     #   aiohttp-socks
