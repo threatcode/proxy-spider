@@ -1,61 +1,105 @@
-# proxy-spider
+# 🚀 proxy-spider
 
 [![CI](https://github.com/threatcode/proxy-spider/actions/workflows/ci.yml/badge.svg)](https://github.com/threatcode/proxy-spider/actions/workflows/ci.yml)
 
-![Screenshot](screenshot.png)
+![TUI Demo](https://github.com/user-attachments/assets/0ac37021-d11c-4f68-b80d-bafdbaeb00bb)
 
-HTTP, SOCKS4, SOCKS5 proxies scraper and checker.
+**A lightning-fast, feature-rich proxy scraper and checker built in Rust.**
 
-- Asynchronous.
-- Uses regex to search for proxies (ip:port format) on a web page, allowing proxies to be extracted even from json without making changes to the code.
-- It is possible to specify the URL to which to send a request to check the proxy.
-- Can sort proxies by speed.
-- Supports determining the geolocation of the proxy exit node.
-- Can determine if the proxy is anonymous.
+Collect, test, and organize HTTP/SOCKS4/SOCKS5 proxies from multiple sources with detailed metadata and intelligent filtering.
 
-You can get proxies obtained using this script in [threatcode/proxy-list](https://github.com/threatcode/proxy-list).
+## ✨ Key Features
 
-## Installation and usage
+- **🔥 Blazing Performance** - Rust-powered async engine with configurable concurrency
+- **🌍 Rich Metadata** - ASN, geolocation, and response time data via offline MaxMind databases
+- **🎯 Smart Parsing** - Advanced regex engine extracts proxies from any format (`protocol://user:pass@host:port`)
+- **🔐 Auth Support** - Handles username/password authentication seamlessly
+- **📊 Interactive TUI** - Real-time progress monitoring with beautiful terminal interface
+- **⚡ Flexible Output** - JSON (with metadata) and plain text formats
+- **🎛️ Configurable** - Extensive options for sources, timeouts, and checking
+- **📁 Local & Remote** - Supports both web URLs and local files as proxy sources
+- **🐳 Docker Ready** - Containerized deployment with volume mounting
 
-### Desktop
+## 🔗 Related
 
-- Download and unpack [the archive with the program](https://github.com/threatcode/proxy-spider/archive/refs/heads/main.zip).
-- Edit `config.ini` to your preference.
-- Install [Python](https://python.org/downloads) (minimum required version is 3.7).
-- Run the script that installs dependencies and starts `proxy-spider`:
-  - On Windows run `start.cmd`
-  - On Unix-like operating systems run `start.sh`
+Get pre-checked proxies from [threatcode/proxy-list](https://github.com/threatcode/proxy-list) - updated regularly using this tool.
 
-### Termux
+## ⚠️ SAFETY WARNING ⚠️
 
-To use `proxy-spider` in Termux, knowledge of the Unix command-line interface is required.
+This tool makes many network requests and can impact your IP-address reputation. Consider using a VPN for safer operation.
 
-- Download Termux from [F-Droid](https://f-droid.org/en/packages/com.termux/). [Don't download it from Google Play](https://github.com/termux/termux-app#google-play-store-deprecated).
-- Run the following command (it will automatically update Termux packages, install Python, and download and install `proxy-spider`):
-  ```bash
-  bash <(curl -fsSL 'https://raw.githubusercontent.com/threatcode/proxy-spider/main/install-termux.sh')
-  ```
-- Edit `~/proxy-spider/config.ini` to your preference using a text editor (vim/nano).
-- To run `proxy-spider` use the following command:
-  ```bash
-  cd ~/proxy-spider && sh start-termux.sh
-  ```
+## 🚀 Quick Start
 
-## Checking local proxy lists
+> All configuration options are documented in `config.toml` - edit it to customize sources, timeouts, and output preferences.
 
-To check the local proxy lists, start the Python HTTP server on your local machine by running the `python -m http.server --bind localhost` command in the folder with the proxy lists. After that, add links to the appropriate files in `config.ini`.
+<details>
+<summary>💻 Binary Installation</summary>
 
-## Folders description
+> **Note:** For Termux users, see the dedicated section below.
 
-When the script finishes running, the following folders will be created (this behavior can be changed in the config):
+1. **Download** the appropriate binary from [nightly builds](https://nightly.link/threatcode/proxy-spider/workflows/ci/main?preview)
+   - Not sure which one? Check the [platform support table](https://doc.rust-lang.org/beta/rustc/platform-support.html)
 
-- `proxies` - proxies with any anonymity level.
-- `proxies_anonymous` - anonymous proxies.
-- `proxies_geolocation` - same as `proxies`, but includes exit-node's geolocation.
-- `proxies_geolocation_anonymous` - same as `proxies_anonymous`, but includes exit-node's geolocation.
+2. **Extract** the archive to a dedicated folder
 
-Geolocation format is `ip:port|Country|Region|City`.
+3. **Configure** by editing `config.toml` to your needs
 
-## License
+4. **Run** the executable
+
+</details>
+
+<details>
+<summary>🐳 Docker Installation</summary>
+
+> **Note:** Docker version uses a simplified log-based interface (no TUI).
+
+1. **Install** [Docker Compose](https://docs.docker.com/compose/install/)
+
+2. **Download** the docker archive from [nightly builds](https://nightly.link/threatcode/proxy-spider/workflows/ci/main?preview)
+   - Look for artifacts named `proxy-spider-docker`
+
+3. **Extract** to a folder and configure `config.toml`
+
+4. **Build and run:**
+
+   ```bash
+   # Windows
+   docker compose build
+   docker compose up --no-log-prefix --remove-orphans
+
+   # Linux/macOS
+   docker compose build --build-arg UID=$(id -u) --build-arg GID=$(id -g)
+   docker compose up --no-log-prefix --remove-orphans
+   ```
+
+</details>
+
+<details>
+<summary>📱 Termux Installation</summary>
+
+> **Important:** Download Termux from [F-Droid](https://f-droid.org/en/packages/com.termux/), not Google Play ([why?](https://github.com/termux/termux-app#google-play-store-experimental-branch)).
+
+1. **Auto-install** with one command:
+
+   ```bash
+   bash <(curl -fsSL 'https://raw.githubusercontent.com/threatcode/proxy-spider/main/termux.sh')
+   ```
+
+2. **Configure** using a text editor:
+
+   ```bash
+   nano ~/proxy-spider/config.toml
+   ```
+
+3. **Run the tool:**
+   ```bash
+   cd ~/proxy-spider && ./proxy-spider
+   ```
+
+</details>
+
+## 📄 License
 
 [MIT](LICENSE)
+
+_This product includes GeoLite2 Data created by MaxMind, available from https://www.maxmind.com_

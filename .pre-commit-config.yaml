@@ -1,12 +1,14 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: check-case-conflict
       - id: check-executables-have-shebangs
       - id: check-illegal-windows-names
       - id: check-merge-conflict
       - id: check-shebang-scripts-are-executable
+        exclude_types:
+          - rust
       - id: check-symlinks
       - id: check-toml
       - id: check-xml
@@ -18,33 +20,6 @@ repos:
           - --fix=lf
       - id: trailing-whitespace
   - repo: https://github.com/rbubley/mirrors-prettier
-    rev: v3.3.3
+    rev: v3.6.2
     hooks:
       - id: prettier
-  - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: v0.7.2
-    hooks:
-      - id: ruff
-        args:
-          - --fix
-      - id: ruff-format
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
-    hooks:
-      - id: mypy
-        args:
-          - --scripts-are-modules
-        additional_dependencies:
-          - orjson
-          - aiohttp<4
-          - attrs
-          - certifi
-          - charset-normalizer<4
-          - maxminddb<3
-          - platformdirs<5
-          - rich<14
-          - tomli<3
-          - types-aiofiles
-          - typing-extensions<5
-          - uvloop<0.22; implementation_name=='cpython' and (sys_platform=='darwin' or sys_platform=='linux')
-          - winloop<0.1.7; implementation_name=='cpython' and (sys_platform=='cygwin' or sys_platform=='win32')

@@ -1,7 +1,11 @@
 services:
   app:
-    build: .
-    tty: true
+    build:
+      args:
+        - "UID=${UID:-1000}"
+        - "GID=${GID:-1000}"
+      pull: true
+    init: true
     volumes:
       - proxy_spider_cache:/home/app/.cache/proxy_spider
       - ./out:/home/app/.local/share/proxy_spider
