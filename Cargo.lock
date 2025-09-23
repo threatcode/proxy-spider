@@ -1499,6 +1499,7 @@ dependencies = [
  "hickory-resolver",
  "http",
  "httpdate",
+ "ipnetwork",
  "itertools 0.14.0",
  "log",
  "maxminddb",
