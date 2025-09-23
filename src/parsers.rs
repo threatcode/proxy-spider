@@ -34,20 +34,20 @@ pub fn parse_ipv4(s: &str) -> Option<String> {
 pub fn expand_cidr_ranges(text: &str) -> String {
     let mut result = text.to_string();
     let mut offset: i32 = 0;
-    
+
     // Find all CIDR matches and expand them
     let captures: Vec<_> = CIDR_REGEX.captures_iter(text)
         .filter_map(|m| m.ok())
         .collect();
-    
+
     for capture in captures {
         if let (Some(network), Some(prefix), Some(port)) = (
-            capture.name("network"), 
-            capture.name("prefix"), 
+            capture.name("network"),
+            capture.name("prefix"),
             capture.name("port")
         ) {
             let cidr_str = format!("{}/{}", network.as_str(), prefix.as_str());
-            
+
             match cidr_str.parse::<IpNetwork>() {
                 Ok(network) => {
                     // Generate expanded IPs
@@ -55,29 +55,29 @@ pub fn expand_cidr_ranges(text: &str) -> String {
                         .filter(|ip| ip.is_ipv4())
                         .map(|ip| format!("{}:{}", ip, port.as_str()))
                         .collect();
-                    
+
                     if !expanded_ips.is_empty() {
                         // Get the full match including any leading non-alphanumeric character
                         let full_match = capture.get(0).unwrap();
                         let match_start = (full_match.start() as i32 + offset) as usize;
                         let match_end = (full_match.end() as i32 + offset) as usize;
-                        
+
                         // Determine what separator to use by checking what follows
                         let separator = if match_end < result.len() {
                             let next_char = result.chars().nth(match_end);
                             match next_char {
                                 Some('\n') => "\n",
-                                Some('\t') => "\t", 
+                                Some('\t') => "\t",
                                 Some(',') => ",",
                                 _ => " ",
                             }
                         } else {
                             "\n"
                         };
-                        
+
                         // Join expanded IPs with the detected separator
                         let replacement = expanded_ips.join(separator);
-                        
+
                         // Handle case where match starts with a delimiter character
                         let (_actual_start, prefix_char) = if match_start > 0 {
                             let prev_char = result.chars().nth(match_start);
@@ -89,12 +89,12 @@ pub fn expand_cidr_ranges(text: &str) -> String {
                         } else {
                             (match_start, String::new())
                         };
-                        
+
                         let final_replacement = format!("{}{}", prefix_char, replacement);
-                        
+
                         // Replace the CIDR pattern with expanded IPs
                         result.replace_range(match_start..match_end, &final_replacement);
-                        
+
                         // Update offset for subsequent replacements
                         let len_diff = final_replacement.len() as i32 - (match_end - match_start) as i32;
                         offset += len_diff;
@@ -107,7 +107,7 @@ pub fn expand_cidr_ranges(text: &str) -> String {
             }
         }
     }
-    
+
     result
 }
 
@@ -121,7 +121,7 @@ mod tests {
         let input = "192.168.1.0/30:8080";
         let result = expand_cidr_ranges(input);
         let lines: Vec<&str> = result.trim().split('\n').collect();
-        
+
         assert_eq!(lines.len(), 4);
         assert!(lines.contains(&"192.168.1.0:8080"));
         assert!(lines.contains(&"192.168.1.1:8080"));
@@ -134,7 +134,7 @@ mod tests {
         let input = "192.168.1.0/31:8080\n127.0.0.1:9090\ninvalid-line";
         let result = expand_cidr_ranges(input);
         let lines: Vec<&str> = result.trim().split('\n').collect();
-        
+
         // Should have 2 CIDR-expanded IPs + 1 regular IP + 1 invalid line
         assert_eq!(lines.len(), 4);
         assert!(lines.contains(&"192.168.1.0:8080"));
@@ -155,19 +155,19 @@ mod tests {
         // Test space-separated entries with CIDR expansion
         let input = "192.168.1.0/31:8080 127.0.0.1:9090";
         let result = expand_cidr_ranges(input);
-        
+
         // Should expand the CIDR range and preserve the regular proxy
         assert!(result.contains("192.168.1.0:8080"));
         assert!(result.contains("192.168.1.1:8080"));
         assert!(result.contains("127.0.0.1:9090"));
     }
 
-    #[test] 
+    #[test]
     fn test_multiple_cidr_same_line_behavior() {
         // Test multiple CIDR ranges on same line
         let input = "192.168.1.0/31:8080 10.0.0.0/31:3128";
         let result = expand_cidr_ranges(input);
-        
+
         // Should expand both CIDR ranges
         assert!(result.contains("192.168.1.0:8080"));
         assert!(result.contains("192.168.1.1:8080"));
@@ -179,7 +179,7 @@ mod tests {
     fn test_comma_separated_cidr() {
         let input = "192.168.1.0/31:8080,10.0.0.0/31:3128";
         let result = expand_cidr_ranges(input);
-        
+
         // Should expand both CIDR ranges and preserve comma separation
         assert!(result.contains("192.168.1.0:8080"));
         assert!(result.contains("192.168.1.1:8080"));
@@ -191,7 +191,7 @@ mod tests {
     fn test_mixed_separators() {
         let input = "192.168.1.0/31:8080\t10.0.0.1:3128,203.0.113.0/31:1080 127.0.0.1:9090";
         let result = expand_cidr_ranges(input);
-        
+
         // Should expand CIDR ranges and preserve non-CIDR entries
         assert!(result.contains("192.168.1.0:8080"));
         assert!(result.contains("192.168.1.1:8080"));

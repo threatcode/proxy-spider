@@ -70,13 +70,14 @@ async fn scrape_one(
 
     // Expand CIDR ranges to individual IP:port entries
     let expanded_text = expand_cidr_ranges(&text);
-    
+
     #[cfg(feature = "tui")]
     let mut seen_protocols = HashSet::new();
 
     let mut new_proxies = HashSet::new();
 
-    for (i, maybe_capture) in PROXY_REGEX.captures_iter(&expanded_text).enumerate() {
+    for (_, maybe_capture) in PROXY_REGEX.captures_iter(&expanded_text).enumerate() {
+
         if config.scraping.max_proxies_per_source != 0
             && new_proxies.len() >= config.scraping.max_proxies_per_source
         {
