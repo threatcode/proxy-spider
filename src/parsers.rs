@@ -36,22 +36,22 @@ pub fn expand_cidr_ranges(text: &str) -> String {
     let mut offset: i32 = 0;
 
     // Find all CIDR matches and expand them
-    let captures: Vec<_> = CIDR_REGEX.captures_iter(text)
-        .filter_map(|m| m.ok())
-        .collect();
+    let captures: Vec<_> =
+        CIDR_REGEX.captures_iter(text).filter_map(|m| m.ok()).collect();
 
     for capture in captures {
         if let (Some(network), Some(prefix), Some(port)) = (
             capture.name("network"),
             capture.name("prefix"),
-            capture.name("port")
+            capture.name("port"),
         ) {
             let cidr_str = format!("{}/{}", network.as_str(), prefix.as_str());
 
             match cidr_str.parse::<IpNetwork>() {
                 Ok(network) => {
                     // Generate expanded IPs
-                    let expanded_ips: Vec<String> = network.iter()
+                    let expanded_ips: Vec<String> = network
+                        .iter()
                         .filter(|ip| ip.is_ipv4())
                         .map(|ip| format!("{}:{}", ip, port.as_str()))
                         .collect();
@@ -59,8 +59,10 @@ pub fn expand_cidr_ranges(text: &str) -> String {
                     if !expanded_ips.is_empty() {
                         // Get the full match including any leading non-alphanumeric character
                         let full_match = capture.get(0).unwrap();
-                        let match_start = (full_match.start() as i32 + offset) as usize;
-                        let match_end = (full_match.end() as i32 + offset) as usize;
+                        let match_start =
+                            (full_match.start() as i32 + offset) as usize;
+                        let match_end =
+                            (full_match.end() as i32 + offset) as usize;
 
                         // Determine what separator to use by checking what follows
                         let separator = if match_end < result.len() {
@@ -81,8 +83,17 @@ pub fn expand_cidr_ranges(text: &str) -> String {
                         // Handle case where match starts with a delimiter character
                         let (_actual_start, prefix_char) = if match_start > 0 {
                             let prev_char = result.chars().nth(match_start);
-                            if prev_char.map_or(false, |c| !c.is_ascii_alphanumeric()) {
-                                (match_start + 1, result.chars().nth(match_start).unwrap().to_string())
+                            if prev_char
+                                .map_or(false, |c| !c.is_ascii_alphanumeric())
+                            {
+                                (
+                                    match_start + 1,
+                                    result
+                                        .chars()
+                                        .nth(match_start)
+                                        .unwrap()
+                                        .to_string(),
+                                )
                             } else {
                                 (match_start, String::new())
                             }
@@ -90,13 +101,18 @@ pub fn expand_cidr_ranges(text: &str) -> String {
                             (match_start, String::new())
                         };
 
-                        let final_replacement = format!("{}{}", prefix_char, replacement);
+                        let final_replacement =
+                            format!("{}{}", prefix_char, replacement);
 
                         // Replace the CIDR pattern with expanded IPs
-                        result.replace_range(match_start..match_end, &final_replacement);
+                        result.replace_range(
+                            match_start..match_end,
+                            &final_replacement,
+                        );
 
                         // Update offset for subsequent replacements
-                        let len_diff = final_replacement.len() as i32 - (match_end - match_start) as i32;
+                        let len_diff = final_replacement.len() as i32
+                            - (match_end - match_start) as i32;
                         offset += len_diff;
                     }
                 }

@@ -76,8 +76,9 @@ async fn scrape_one(
 
     let mut new_proxies = HashSet::new();
 
-    for (_, maybe_capture) in PROXY_REGEX.captures_iter(&expanded_text).enumerate() {
-
+    for (_, maybe_capture) in
+        PROXY_REGEX.captures_iter(&expanded_text).enumerate()
+    {
         if config.scraping.max_proxies_per_source != 0
             && new_proxies.len() >= config.scraping.max_proxies_per_source
         {
