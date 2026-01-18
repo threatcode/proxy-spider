@@ -1,53 +1,33 @@
-# syntax=docker/dockerfile:1
+# syntax=docker.io/docker/dockerfile:1
 
-FROM docker.io/python:3.12-slim-bookworm AS python-base-stage
-
-ENV \
-  PYTHONDONTWRITEBYTECODE=1 \
-  PYTHONUNBUFFERED=1
+FROM docker.io/rust:slim-trixie AS builder
 
 WORKDIR /app
 
-
-FROM python-base-stage AS python-build-stage
-
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends build-essential \
-  && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
-  && rm -rf /var/lib/apt/lists/*
-
-ENV \
-  UV_COMPILE_BYTECODE=1 \
-  UV_LINK_MODE=copy
-
-RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
-  --mount=type=cache,target=/root/.cache/uv,sharing=locked \
-  --mount=source=pyproject.toml,target=pyproject.toml \
-  --mount=source=uv.lock,target=uv.lock \
-  uv sync --extra non-termux --no-dev --no-install-project --frozen
+RUN --mount=source=src,target=src \
+  --mount=source=Cargo.toml,target=Cargo.toml \
+  --mount=source=Cargo.lock,target=Cargo.lock \
+  --mount=type=cache,target=/app/target,sharing=locked \
+  --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+  cargo build --features mimalloc --release --locked \
+  && cp target/release/proxy-spider .
 
 
-FROM python-base-stage AS python-run-stage
+FROM docker.io/debian:trixie-slim AS final
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends tini \
-  && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
-  && rm -rf /var/lib/apt/lists/* \
-  && groupadd --gid 1000 app \
-  && useradd --gid 1000 --no-log-init --create-home --uid 1000 app \
+WORKDIR /app
+
+ARG \
+  UID=1000 \
+  GID=1000
+
+RUN (getent group "${GID}" || groupadd --gid "${GID}" app) \
+  && useradd --gid "${GID}" --no-log-init --create-home --uid "${UID}" app \
   && mkdir -p /home/app/.cache/proxy_spider \
-  && chown 1000:1000 /home/app/.cache/proxy_spider
+  && chown ${UID}:${GID} /home/app/.cache/proxy_spider
 
-COPY --from=python-build-stage --chown=1000:1000 --link /app/.venv /app/.venv
-
-ENV PATH="/app/.venv/bin:$PATH"
-
-ENV IS_DOCKER=1
+COPY --from=builder --chown=${UID}:${GID} --link /app/proxy-spider .
 
 USER app
 
-COPY --chown=1000:1000 . .
-
-ENTRYPOINT ["tini", "--"]
-
-CMD ["python", "-m", "proxy_spider"]
+CMD ["/app/proxy-spider"]

@@ -1,4 +1,0 @@
-**
-!proxy_spider/**/*.py
-!pyproject.toml
-!uv.lock

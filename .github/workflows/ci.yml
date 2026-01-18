@@ -9,46 +9,442 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 jobs:
-  run-pre-commit:
-    runs-on: ubuntu-latest
+  check:
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    needs:
+      - build
+      - clippy
+      - pre-commit
+      - rustfmt
+      - udeps
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
-      - run: uv tool run --from pre-commit@latest --with pre-commit-uv --no-cache --python 3.12 pre-commit run --all-files
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
   build:
     strategy:
       matrix:
         include:
-          - name: linux-x86-64
-            runner: ubuntu-latest
-          - name: windows-x86-64
-            runner: windows-latest
-          - name: macos-x86-64
-            runner: macos-13
-          - name: macos-arm64
-            runner: macos-14
+          - target: aarch64-apple-darwin
+            runner: macos-15
+            cross: false
+          - target: aarch64-pc-windows-msvc
+            runner: windows-11-arm
+            cross: false
+            executable: proxy-spider.exe
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            cross: false
+          - target: i686-pc-windows-msvc
+            runner: windows-2025
+            cross: false
+            executable: proxy-spider.exe
+          - target: x86_64-apple-darwin
+            runner: macos-15
+            cross: false
+          - target: x86_64-pc-windows-msvc
+            runner: windows-2025
+            cross: false
+            executable: proxy-spider.exe
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            cross: false
+          - target: aarch64-linux-android
+            runner: ubuntu-24.04
+            cross: true
+          # - target: aarch64-unknown-linux-gnu
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: aarch64-unknown-linux-gnu:centos
+          #   runner: ubuntu-24.04
+          #   cross: true
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04
+            cross: true
+          - target: arm-linux-androideabi
+            runner: ubuntu-24.04
+            cross: true
+          - target: arm-unknown-linux-gnueabi
+            runner: ubuntu-24.04
+            cross: true
+          - target: arm-unknown-linux-gnueabihf
+            runner: ubuntu-24.04
+            cross: true
+          - target: arm-unknown-linux-musleabi
+            runner: ubuntu-24.04
+            cross: true
+          - target: arm-unknown-linux-musleabihf
+            runner: ubuntu-24.04
+            cross: true
+          - target: armv5te-unknown-linux-gnueabi
+            runner: ubuntu-24.04
+            cross: true
+          - target: armv5te-unknown-linux-musleabi
+            runner: ubuntu-24.04
+            cross: true
+          - target: armv7-linux-androideabi
+            runner: ubuntu-24.04
+            cross: true
+          - target: armv7-unknown-linux-gnueabi
+            runner: ubuntu-24.04
+            cross: true
+          - target: armv7-unknown-linux-gnueabihf
+            runner: ubuntu-24.04
+            cross: true
+          - target: armv7-unknown-linux-musleabi
+            runner: ubuntu-24.04
+            cross: true
+          - target: armv7-unknown-linux-musleabihf
+            runner: ubuntu-24.04
+            cross: true
+          # - target: i586-unknown-linux-gnu
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: i586-unknown-linux-musl
+          #   runner: ubuntu-24.04
+          #   cross: true
+          - target: i686-unknown-freebsd
+            runner: ubuntu-24.04
+            cross: true
+          - target: i686-linux-android
+            runner: ubuntu-24.04
+            cross: true
+          # - target: i686-pc-windows-gnu
+          #   runner: ubuntu-24.04
+          #   cross: true
+          - target: i686-unknown-linux-gnu
+            runner: ubuntu-24.04
+            cross: true
+          - target: loongarch64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            cross: true
+          - target: loongarch64-unknown-linux-musl
+            runner: ubuntu-24.04
+            cross: true
+          # - target: mips-unknown-linux-gnu
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: mips-unknown-linux-musl
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: mips64-unknown-linux-gnuabi64
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: mips64-unknown-linux-muslabi64
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: mips64el-unknown-linux-gnuabi64
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: mips64el-unknown-linux-muslabi64
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: mipsel-unknown-linux-gnu
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: mipsel-unknown-linux-musl
+          #   runner: ubuntu-24.04
+          #   cross: true
+          - target: powerpc-unknown-linux-gnu
+            runner: ubuntu-24.04
+            cross: true
+          - target: powerpc64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            cross: true
+          - target: powerpc64le-unknown-linux-gnu
+            runner: ubuntu-24.04
+            cross: true
+          - target: riscv64gc-unknown-linux-gnu
+            runner: ubuntu-24.04
+            cross: true
+          - target: riscv64gc-unknown-linux-musl
+            runner: ubuntu-24.04
+            cross: true
+          - target: s390x-unknown-linux-gnu
+            runner: ubuntu-24.04
+            cross: true
+          - target: sparc64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            cross: true
+          # - target: sparcv9-sun-solaris
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: thumbv6m-none-eabi
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: thumbv7em-none-eabi
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: thumbv7em-none-eabihf
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: thumbv7m-none-eabi
+          #   runner: ubuntu-24.04
+          #   cross: true
+          - target: thumbv7neon-linux-androideabi
+            runner: ubuntu-24.04
+            cross: true
+          - target: thumbv7neon-unknown-linux-gnueabihf
+            runner: ubuntu-24.04
+            cross: true
+          # - target: thumbv8m.base-none-eabi
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: thumbv8m.main-none-eabi
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: thumbv8m.main-none-eabihf
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: wasm32-unknown-emscripten
+          #   runner: ubuntu-24.04
+          #   cross: true
+          - target: x86_64-linux-android
+            runner: ubuntu-24.04
+            cross: true
+          # - target: x86_64-pc-windows-gnu
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: x86_64-pc-solaris
+          #   runner: ubuntu-24.04
+          #   cross: true
+          - target: x86_64-unknown-freebsd
+            runner: ubuntu-24.04
+            cross: true
+          # - target: x86_64-unknown-dragonfly
+          #   runner: ubuntu-24.04
+          #   cross: true
+          - target: x86_64-unknown-illumos
+            runner: ubuntu-24.04
+            cross: true
+          # - target: x86_64-unknown-linux-gnu
+          #   runner: ubuntu-24.04
+          #   cross: true
+          # - target: x86_64-unknown-linux-gnu:centos
+          #   runner: ubuntu-24.04
+          #   cross: true
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-24.04
+            cross: true
+          - target: x86_64-unknown-netbsd
+            runner: ubuntu-24.04
+            cross: true
       fail-fast: false
     runs-on: ${{ matrix.runner }}
-    permissions:
-      id-token: write
-      attestations: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@v5
         with:
-          enable-cache: true
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          python-version: "3.12"
-          check-latest: true
-      - run: uv run --extra non-termux --no-dev --group nuitka --frozen --python 3.12 python -m nuitka --standalone --python-flag='-m' --assume-yes-for-downloads --lto=yes proxy_spider
-      - run: mv config.toml proxy_spider.dist/
-      - if: ${{ github.event_name != 'pull_request' }}
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-path: proxy_spider.dist
+          toolchain: beta
+          target: ${{ matrix.target }}
+          cache-key: ${{ matrix.target }}
+      - if: ${{ matrix.cross  }}
+        run: cargo +beta install cross --git https://github.com/cross-rs/cross
+        env:
+          RUSTFLAGS: ""
+      - if: ${{ matrix.cross  }}
+        run: cross +beta build --features mimalloc,tui --release --target '${{ matrix.target }}' --locked
+      - if: ${{ !matrix.cross }}
+        run: cargo +beta build --features mimalloc,tui --release --target '${{ matrix.target }}' --locked
+      - run: mkdir dist
+      - run: echo -n '${{ github.sha }}' > dist/commit-sha.txt
+        shell: bash
+      - run: mv config.toml dist/
+      - run: mv LICENSE dist/
+      - run: mv target/${{ matrix.target}}/release/${{ matrix.executable || 'proxy-spider' }} dist/
       - uses: actions/upload-artifact@v4
         with:
-          name: artifact-${{ matrix.name }}
-          path: proxy_spider.dist/
+          name: proxy-spider-${{ matrix.target }}
+          path: dist/
           if-no-files-found: error
+  build-docker:
+    if: ${{ github.event_name != 'pull_request' }}
+    permissions:
+      packages: write
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - platform: "linux/386"
+            tag: "386"
+            runner: ubuntu-24.04
+          - platform: "linux/amd64"
+            tag: "amd64"
+            runner: ubuntu-24.04
+          - platform: "linux/arm/v7"
+            tag: "arm-v7"
+            runner: ubuntu-24.04-arm
+          - platform: "linux/arm64/v8"
+            tag: "arm64-v8"
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: type=raw,value=${{ github.sha }}-${{ matrix.tag }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - id: push
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        uses: docker/build-push-action@v6
+        with:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: ${{ matrix.platform }}
+          provenance: false
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+  upload-docker-manifest:
+    needs:
+      - build-docker
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: >
+          docker manifest create ghcr.io/${{ github.repository }}:${{ github.sha }}
+          --amend ghcr.io/${{ github.repository }}:${{ github.sha }}-386
+          --amend ghcr.io/${{ github.repository }}:${{ github.sha }}-amd64
+          --amend ghcr.io/${{ github.repository }}:${{ github.sha }}-arm-v7
+          --amend ghcr.io/${{ github.repository }}:${{ github.sha }}-arm64-v8
+      - run: docker manifest push ghcr.io/${{ github.repository }}:${{ github.sha }}
+  upload-docker-prebuilt:
+    needs:
+      - upload-docker-manifest
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        platform:
+          - "386"
+          - "amd64"
+          - "arm-v7"
+          - "arm64-v8"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - run: mkdir -p dist
+      - run: echo -n '${{ github.sha }}' > dist/commit-sha.txt
+      - run: mv {out,compose.yaml,config.toml,LICENSE} dist/
+      - name: Create Dockerfile
+        run: |
+          cat << 'EOF' > dist/Dockerfile
+          # syntax=docker.io/docker/dockerfile:1
+
+          FROM ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+          ARG \
+            UID=1000 \
+            GID=1000
+
+          USER root
+
+          RUN (getent group "${GID}" || groupmod --gid "${GID}" app) \
+            && usermod --uid "${UID}" --gid "${GID}" app
+
+          USER app
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: proxy-spider-docker-${{ matrix.platform }}
+          path: dist/
+          if-no-files-found: error
+          include-hidden-files: true
+  upload-docker-src:
+    needs:
+      - build-docker
+    strategy:
+      matrix:
+        platform:
+          - "ppc64le"
+          - "s390x"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - run: mkdir -p dist
+      - run: echo -n '${{ github.sha }}' > dist/commit-sha.txt
+      - run: mv {out,src,Cargo.lock,Cargo.toml,compose.yaml,config.toml,Dockerfile,LICENSE} dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: proxy-spider-docker-${{ matrix.platform }}
+          path: dist/
+          if-no-files-found: error
+          include-hidden-files: true
+  clippy:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - features: "--features tui"
+            target: aarch64-apple-darwin,aarch64-pc-windows-msvc,aarch64-unknown-linux-gnu,i686-pc-windows-msvc,x86_64-apple-darwin,x86_64-pc-windows-msvc,x86_64-unknown-linux-gnu,aarch64-linux-android,aarch64-unknown-linux-musl,arm-linux-androideabi,arm-unknown-linux-gnueabi,arm-unknown-linux-gnueabihf,arm-unknown-linux-musleabi,arm-unknown-linux-musleabihf,armv5te-unknown-linux-gnueabi,armv5te-unknown-linux-musleabi,armv7-linux-androideabi,armv7-unknown-linux-gnueabi,armv7-unknown-linux-gnueabihf,armv7-unknown-linux-musleabi,armv7-unknown-linux-musleabihf,i686-unknown-freebsd,i686-linux-android,i686-unknown-linux-gnu,loongarch64-unknown-linux-gnu,loongarch64-unknown-linux-musl,powerpc-unknown-linux-gnu,powerpc64-unknown-linux-gnu,powerpc64le-unknown-linux-gnu,riscv64gc-unknown-linux-gnu,riscv64gc-unknown-linux-musl,s390x-unknown-linux-gnu,sparc64-unknown-linux-gnu,thumbv7neon-linux-androideabi,thumbv7neon-unknown-linux-gnueabihf,x86_64-linux-android,x86_64-unknown-freebsd,x86_64-unknown-illumos,x86_64-unknown-linux-musl,x86_64-unknown-netbsd
+          - features: ""
+            target: aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu,armv7-unknown-linux-gnueabihf,i686-unknown-linux-gnu,powerpc64le-unknown-linux-gnu,s390x-unknown-linux-gnu
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: beta
+          target: ${{ matrix.target }}
+          components: clippy
+          cache-key: x86_64-unknown-linux-gnu
+      - run: cargo +beta clippy --all-targets ${{ matrix.features }}
+  pre-commit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      - run: uv tool run --no-cache --python 3.13 prek run --all-files --show-diff-on-failure
+        env:
+          RUFF_OUTPUT_FORMAT: github
+  rustfmt:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: rustfmt
+          cache-key: x86_64-unknown-linux-gnu
+      - run: cargo +nightly fmt --check
+  udeps:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly
+          cache-key: x86_64-unknown-linux-gnu
+      - run: cargo +nightly install --locked cargo-udeps
+      - run: cargo +nightly udeps
+      - run: cargo +nightly udeps --features mimalloc,tui
