@@ -136,11 +136,43 @@ pub struct OutputConfig {
 }
 
 #[derive(serde::Deserialize)]
+pub struct ServerConfig {
+    pub enabled: bool,
+    #[serde(default = "default_bind_address")]
+    pub bind_address: String,
+    #[serde(default = "default_port")]
+    pub port: u16,
+    #[serde(default)]
+    pub tor_isolation: bool,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            bind_address: default_bind_address(),
+            port: default_port(),
+            tor_isolation: false,
+        }
+    }
+}
+
+fn default_bind_address() -> String {
+    "127.0.0.1".to_string()
+}
+
+const fn default_port() -> u16 {
+    8080
+}
+
+#[derive(serde::Deserialize)]
 pub struct RawConfig {
     pub debug: bool,
     pub scraping: ScrapingConfig,
     pub checking: CheckingConfig,
     pub output: OutputConfig,
+    #[serde(default)]
+    pub server: ServerConfig,
 }
 
 #[expect(clippy::missing_trait_methods)]

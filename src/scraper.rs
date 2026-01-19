@@ -128,6 +128,8 @@ async fn scrape_one(
         return Ok(());
     }
 
+    metrics::counter!("proxies_scraped_total", "protocol" => proto.as_str()).increment(new_proxies.len() as u64);
+
     drop(source);
 
     let mut proxies = proxies.lock();

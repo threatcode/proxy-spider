@@ -58,11 +58,31 @@ pub struct OutputConfig {
     pub json: JsonOutputConfig,
 }
 
+pub struct ServerConfig {
+    pub enabled: bool,
+    pub bind_addr: std::net::SocketAddr,
+    pub tor_isolation: bool,
+    pub auth: Option<String>,
+    pub rotation_method: String, // "sequent" or "random"
+    pub rotate_after_requests: usize,
+    pub rotate_on_error: bool,
+    pub remove_on_error: bool,
+    pub max_errors: Option<isize>,
+    pub max_redirs: Option<usize>,
+    pub max_retries: Option<usize>,
+    pub country_filter: Option<Vec<String>>,
+    pub sync: bool,
+    pub verbose: bool,
+    pub output: Option<PathBuf>,
+}
+
+
 pub struct Config {
     pub debug: bool,
     pub scraping: ScrapingConfig,
     pub checking: CheckingConfig,
     pub output: OutputConfig,
+    pub server: ServerConfig,
 }
 
 async fn get_output_path(
@@ -108,6 +128,15 @@ impl Config {
     pub async fn from_raw_config(
         raw_config: raw_config::RawConfig,
     ) -> crate::Result<Self> {
+        if let Err(errors) = crate::validation::validate_config(&raw_config) {
+            use std::fmt::Write as _;
+            let mut error_msg = String::from("Configuration validation failed:\n");
+            for error in errors {
+                writeln!(error_msg, "  - {error}").unwrap();
+            }
+            return Err(crate::errors::ProxySpiderError::config_invalid(error_msg).into());
+        }
+
         let output_path = get_output_path(&raw_config).await?;
 
         let max_concurrent_checks =
@@ -181,6 +210,28 @@ impl Config {
                         .json
                         .include_geolocation,
                 },
+            },
+            server: ServerConfig {
+                enabled: raw_config.server.enabled,
+                bind_addr: format!(
+                    "{}:{}",
+                    raw_config.server.bind_address, raw_config.server.port
+                )
+                .parse()
+                .wrap_err("failed to parse server bind address")?,
+                tor_isolation: raw_config.server.tor_isolation,
+                auth: None,
+                rotation_method: "random".to_string(),
+                rotate_after_requests: 1,
+                rotate_on_error: false,
+                remove_on_error: false,
+                max_errors: Some(3),
+                max_redirs: None,
+                max_retries: None,
+                country_filter: None,
+                sync: false,
+                verbose: false,
+                output: None,
             },
         })
     }

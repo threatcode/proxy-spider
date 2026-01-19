@@ -103,3 +103,7 @@ This tool makes many network requests and can impact your IP-address reputation.
 [MIT](LICENSE)
 
 _This product includes GeoLite2 Data created by MaxMind, available from https://www.maxmind.com_
+
+## 🤝 Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines and [ARCHITECTURE.md](ARCHITECTURE.md) for system design details.

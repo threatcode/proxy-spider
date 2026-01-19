@@ -49,10 +49,19 @@ pub async fn check_all<R: reqwest::dns::Resolve + 'static>(
                         let check_result = proxy.check(&config, Arc::clone(&dns_resolver)).await;
                         #[cfg(feature = "tui")]
                         drop(tx.send(Event::App(AppEvent::ProxyChecked(proxy.protocol))));
+                        
+                        metrics::counter!("proxies_checked_total").increment(1);
+
                         match check_result {
                             Ok(()) => {
                                 #[cfg(feature = "tui")]
                                 drop(tx.send(Event::App(AppEvent::ProxyWorking(proxy.protocol))));
+                                
+                                metrics::counter!("proxies_working_total", "protocol" => proxy.protocol.as_str()).increment(1);
+                                if let Some(duration) = proxy.timeout {
+                                    metrics::histogram!("proxy_check_duration_seconds", "protocol" => proxy.protocol.as_str()).record(duration.as_secs_f64());
+                                }
+
                                 checked_proxies.lock().push(proxy);
                             }
                             Err(e) if tracing::event_enabled!(tracing::Level::DEBUG) => {
