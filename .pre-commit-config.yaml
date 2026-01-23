@@ -20,6 +20,33 @@ repos:
           - --fix=lf
       - id: trailing-whitespace
   - repo: https://github.com/rbubley/mirrors-prettier
-    rev: v3.6.2
+    rev: v3.5.3
     hooks:
       - id: prettier
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.11.9
+    hooks:
+      - id: ruff
+        args:
+          - --fix
+      - id: ruff-format
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        args:
+          - --scripts-are-modules
+        additional_dependencies:
+          - orjson
+          - aiohttp<4
+          - attrs
+          - certifi
+          - charset-normalizer<4
+          - maxminddb<3
+          - platformdirs<5
+          - rich<14
+          - tomli<3
+          - types-aiofiles
+          - typing-extensions<5
+          - uvloop<0.22; implementation_name=='cpython' and (sys_platform=='darwin' or sys_platform=='linux')
+          - winloop<0.1.7; implementation_name=='cpython' and (sys_platform=='cygwin' or sys_platform=='win32')
