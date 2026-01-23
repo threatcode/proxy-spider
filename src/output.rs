@@ -7,7 +7,6 @@ use std::{
 };
 
 use color_eyre::eyre::WrapErr as _;
-use itertools::Itertools as _;
 
 use crate::{
     HashMap,
@@ -192,28 +191,27 @@ pub async fn save_proxies(
             },
         )?;
 
-        let text = create_proxy_list_str(proxies.iter(), true);
-        tokio::fs::write(directory_path.join("all.txt"), text)
-            .await
-            .wrap_err_with(|| {
-                format!(
-                    "failed to write proxies to {}",
-                    directory_path.join("all.txt").display()
-                )
-            })?;
+        write_proxy_list(
+            &directory_path.join("all.txt"),
+            proxies.iter(),
+            true,
+        )
+        .await
+        .wrap_err_with(|| {
+            format!(
+                "failed to write proxies to {}",
+                directory_path.join("all.txt").display()
+            )
+        })?;
 
         for (proto, proxies) in grouped_proxies {
-            let text = create_proxy_list_str(proxies, false);
             let mut file_path = directory_path.join(proto.as_str());
             file_path.set_extension("txt");
-            tokio::fs::write(&file_path, text).await.wrap_err_with(
-                move || {
-                    format!(
-                        "failed to write proxies to {}",
-                        file_path.display()
-                    )
-                },
-            )?;
+            write_proxy_list(&file_path, proxies, false)
+                .await
+                .wrap_err_with(move || {
+                    format!("failed to write proxies to {}", file_path.display())
+                })?;
         }
     }
 
@@ -234,12 +232,32 @@ pub async fn save_proxies(
     Ok(())
 }
 
-fn create_proxy_list_str<'a, I>(proxies: I, include_protocol: bool) -> String
+async fn write_proxy_list<'a, I>(
+    path: &std::path::Path,
+    proxies: I,
+    include_protocol: bool,
+) -> crate::Result<()>
 where
     I: IntoIterator<Item = &'a Proxy>,
 {
-    proxies
-        .into_iter()
-        .map(move |proxy| proxy.to_string(include_protocol))
-        .join("\n")
+    use tokio::io::AsyncWriteExt as _;
+
+    let file = tokio::fs::File::create(path).await.wrap_err_with(|| {
+        format!("failed to create file {}", path.display())
+    })?;
+    let mut writer = tokio::io::BufWriter::new(file);
+
+    for proxy in proxies {
+        let s = proxy.to_string(include_protocol);
+        writer
+            .write_all(s.as_bytes())
+            .await
+            .wrap_err("failed to write to file")?;
+        writer
+            .write_all(b"\n")
+            .await
+            .wrap_err("failed to write to file")?;
+    }
+    writer.flush().await.wrap_err("failed to flush file")?;
+    Ok(())
 }

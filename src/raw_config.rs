@@ -6,6 +6,7 @@ use std::{
 
 use color_eyre::eyre::WrapErr as _;
 use serde::Deserialize as _;
+use url::Url;
 
 use crate::{HashMap, http::BasicAuth};
 
@@ -23,7 +24,7 @@ fn validate_positive_f64<'de, D: serde::Deserializer<'de>>(
 fn validate_url_generic<'de, D>(
     deserializer: D,
     allowed_schemes: &[&str],
-) -> Result<Option<url::Url>, D::Error>
+) -> Result<Option<Url>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -31,7 +32,7 @@ where
     if s.trim().is_empty() {
         return Ok(None);
     }
-    if let Ok(u) = url::Url::parse(&s)
+    if let Ok(u) = Url::parse(&s)
         && allowed_schemes.contains(&u.scheme())
         && u.host_str().is_some()
     {
@@ -59,13 +60,13 @@ where
 
 fn validate_proxy_url<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
-) -> Result<Option<url::Url>, D::Error> {
+) -> Result<Option<Url>, D::Error> {
     validate_url_generic(deserializer, &["http", "https", "socks4", "socks5"])
 }
 
 fn validate_http_url<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
-) -> Result<Option<url::Url>, D::Error> {
+) -> Result<Option<Url>, D::Error> {
     validate_url_generic(deserializer, &["http", "https"])
 }
 
@@ -96,7 +97,7 @@ pub struct ScrapingConfig {
     #[serde(deserialize_with = "validate_positive_f64")]
     pub connect_timeout: f64,
     #[serde(deserialize_with = "validate_proxy_url")]
-    pub proxy: Option<url::Url>,
+    pub proxy: Option<Url>,
     pub user_agent: String,
 
     pub http: ScrapingProtocolConfig,
@@ -107,7 +108,7 @@ pub struct ScrapingConfig {
 #[derive(serde::Deserialize)]
 pub struct CheckingConfig {
     #[serde(deserialize_with = "validate_http_url")]
-    pub check_url: Option<url::Url>,
+    pub check_url: Option<Url>,
     pub max_concurrent_checks: NonZero<usize>,
     #[serde(deserialize_with = "validate_positive_f64")]
     pub timeout: f64,

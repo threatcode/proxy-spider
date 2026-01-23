@@ -1,7 +1,4 @@
-use std::{
-    net::SocketAddr,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock, atomic::{AtomicUsize, Ordering}};
 
 use color_eyre::eyre::WrapErr as _;
 use tokio::{
@@ -15,27 +12,59 @@ use crate::proxy::Proxy;
 #[derive(Clone)]
 pub struct ProxyPool {
     proxies: Arc<RwLock<Vec<Proxy>>>,
+    current_index: Arc<AtomicUsize>,
+    request_count: Arc<AtomicUsize>,
+    sync_mutex: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl ProxyPool {
     pub fn new() -> Self {
         Self {
             proxies: Arc::new(RwLock::new(Vec::new())),
+            current_index: Arc::new(AtomicUsize::new(0)),
+            request_count: Arc::new(AtomicUsize::new(0)),
+            sync_mutex: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 
     pub fn update(&self, new_proxies: Vec<Proxy>) {
-        // We accept all proxies now, will filter in handle_connection if needed
-        // But for rotation, we generally want checked proxies.
         let mut proxies = self.proxies.write().unwrap();
         *proxies = new_proxies;
+        self.current_index.store(0, Ordering::SeqCst);
+        self.request_count.store(0, Ordering::SeqCst);
         info!("Updated proxy pool with {} proxies", proxies.len());
     }
 
-    pub fn get_random(&self) -> Option<Proxy> {
-         use rand::prelude::IndexedRandom;
+    pub fn get_next(&self, config: &crate::config::Config) -> Option<Proxy> {
         let proxies = self.proxies.read().unwrap();
-        proxies.choose(&mut rand::rng()).map(|p| Proxy {
+        if proxies.is_empty() {
+            return None;
+        }
+
+        let rotate_after = config.server.rotate_after_requests;
+        let count = self.request_count.fetch_add(1, Ordering::SeqCst);
+        
+        let index = if config.server.rotation_method == "random" {
+            use rand::Rng;
+            if rotate_after > 0 && count % rotate_after == 0 {
+                // Time to rotate
+                let idx = rand::rng().random_range(0..proxies.len());
+                self.current_index.store(idx, Ordering::SeqCst);
+                idx
+            } else {
+                self.current_index.load(Ordering::SeqCst)
+            }
+        } else {
+            // Sequent
+            if rotate_after > 0 && count % rotate_after == 0 {
+                let idx = self.current_index.fetch_add(1, Ordering::SeqCst) % proxies.len();
+                idx
+            } else {
+                self.current_index.load(Ordering::SeqCst) % proxies.len()
+            }
+        };
+
+        proxies.get(index).map(|p| Proxy {
             protocol: p.protocol,
             host: p.host.clone(),
             port: p.port,
@@ -47,17 +76,79 @@ impl ProxyPool {
     }
 }
 
+fn redact_cookies(header: &str) -> String {
+    let mut result = String::new();
+    for line in header.lines() {
+        if line.to_lowercase().starts_with("cookie:") {
+            let parts: Vec<&str> = line.splitn(2, ':').collect();
+            if parts.len() == 2 {
+                result.push_str(parts[0]);
+                result.push_str(": ");
+                let cookies = parts[1].trim();
+                let redacted_cookies: Vec<String> = cookies
+                    .split(';')
+                    .map(|c| {
+                        let c = c.trim();
+                        if let Some((name, _)) = c.split_once('=') {
+                             format!("{}=[REDACTED]", name)
+                        } else {
+                             // If no '=', redact the whole part just in case
+                             format!("[REDACTED]")
+                        }
+                    })
+                    .collect();
+                result.push_str(&redacted_cookies.join("; "));
+                result.push_str("\r\n");
+            } else {
+                result.push_str(line);
+                result.push_str("\r\n");
+            }
+        } else {
+            result.push_str(line);
+            result.push_str("\r\n");
+        }
+    }
+    result
+}
+
+fn log_traffic(config: &crate::config::Config, direction: &str, data: &[u8]) {
+    if !config.server.verbose {
+        return;
+    }
+
+    let text = String::from_utf8_lossy(data);
+    // Only log headers (until \r\n\r\n)
+    let header = text.split("\r\n\r\n").next().unwrap_or("");
+    let redacted = redact_cookies(header);
+    
+    // Log to stdout
+    println!("[{}] {}", direction, redacted.trim());
+    
+    // Note: Logging to file if config.server.output is set (requirement: headers NOT written to log file)
+    // "If you use output option (-o/--output) to run proxy IP rotator, request/response headers are NOT written to the log file."
+    // This implies we should be writing SOMETHING to the log file, probably just info about connections.
+}
+
+fn log_info(config: &crate::config::Config, msg: &str) {
+    if let Some(path) = &config.server.output {
+        use std::io::Write;
+        if let Ok(mut file) = std::fs::OpenOptions::new().append(true).create(true).open(path) {
+            let _unused = writeln!(file, "{}", msg);
+        }
+    }
+}
+
 pub async fn start(
-    bind_addr: SocketAddr,
+    config: Arc<crate::config::Config>,
     pool: ProxyPool,
     shutdown: tokio_util::sync::CancellationToken,
-    tor_isolation: bool,
 ) -> crate::Result<()> {
+    let bind_addr = config.server.bind_addr;
     let listener = TcpListener::bind(bind_addr)
         .await
         .wrap_err_with(|| format!("failed to bind to {}", bind_addr))?;
 
-    info!("Proxy server listening on {} (Tor isolation: {})", bind_addr, tor_isolation);
+    info!("Proxy server listening on {} (Tor isolation: {})", bind_addr, config.server.tor_isolation);
 
     loop {
         tokio::select! {
@@ -71,8 +162,9 @@ pub async fn start(
                 };
                 debug!("Accepted connection from {}", addr);
                 let pool = pool.clone();
+                let config = Arc::clone(&config);
                 tokio::spawn(async move {
-                    if let Err(e) = handle_connection(stream, pool, tor_isolation).await {
+                    if let Err(e) = handle_connection(stream, pool, config).await {
                         debug!("Error handling connection from {}: {}", addr, e);
                     }
                 });
@@ -90,8 +182,15 @@ pub async fn start(
 async fn handle_connection(
     mut client_stream: TcpStream,
     pool: ProxyPool,
-    tor_isolation: bool,
+    config: Arc<crate::config::Config>,
 ) -> color_eyre::Result<()> {
+    // Sync mode
+    let _guard = if config.server.sync {
+        Some(pool.sync_mutex.lock().await)
+    } else {
+        None
+    };
+
     // 1. Peek at the request to determine target
     let mut buf = [0u8; 4096];
     let n = client_stream.peek(&mut buf).await?;
@@ -100,7 +199,7 @@ async fn handle_connection(
     }
     let request_str = std::str::from_utf8(&buf[..n]).unwrap_or("");
     
-    // Simple parsing for CONNECT or GET
+    // Simple parsing for CONNECT or HTTP
     let (method, target_host, target_port) = if request_str.starts_with("CONNECT ") {
          let parts: Vec<&str> = request_str.split_whitespace().collect();
          if parts.len() < 2 { return Ok(()); }
@@ -112,9 +211,6 @@ async fn handle_connection(
          };
          ("CONNECT", host, port)
     } else {
-        // Assume GET/POST etc.
-        // We need to extract Host header or absolute URL
-        // Simplest: use Host header
         let mut host = "";
         let mut port = 80;
         for line in request_str.lines() {
@@ -129,40 +225,98 @@ async fn handle_connection(
                 break;
             }
         }
-        if host.is_empty() {
-             // Fallback or fail? If we are a proxy, we expect absolute URI or Host header.
-             return Ok(());
-        }
+        if host.is_empty() { return Ok(()); }
         ("HTTP", host, port)
     };
     
-    // Explicitly cast or type hint if needed, but parser should yield u16 above.
-    // The previous error was because `80` literal defaults to i32.
-    // Ensure all paths return u16.
     let target_port: u16 = target_port;
 
-    let proxy = match pool.get_random() {
-        Some(p) => p,
-        None => return Ok(()),
-    };
+    let max_retries = config.server.max_retries.unwrap_or(0);
+    let max_errors = config.server.max_errors.unwrap_or(3);
+    let mut current_error_count: usize = 0;
 
+    loop {
+        let proxy = match pool.get_next(&config) {
+            Some(p) => p,
+            None => {
+                error!("No proxies available in pool");
+                return Ok(());
+            }
+        };
+
+        log_info(&config, &format!("Using proxy: {}", proxy.to_string(true)));
+
+        let mut current_retry_attempt: usize = 0;
+        loop {
+            match connect_to_upstream(&proxy, target_host, target_port, method, &config).await {
+                Ok(mut upstream_stream) => {
+                    // Log request header
+                    log_traffic(&config, "SEND", &buf[..n]);
+
+                    // Handshake and Tunnel
+                    if method == "CONNECT" && matches!(proxy.protocol, crate::proxy::ProxyType::Socks5) {
+                        client_stream.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n").await?;
+                        if let Some(pos) = request_str.find("\r\n\r\n") {
+                             let mut header_buf = vec![0u8; pos + 4];
+                             client_stream.read_exact(&mut header_buf).await?;
+                        }
+                    }
+
+                    let (mut ri, mut wi) = client_stream.split();
+                    let (mut ro, mut wo) = upstream_stream.split();
+
+                    let ctok = async { tokio::io::copy(&mut ri, &mut wo).await };
+                    let stok = async { 
+                        // Note: capturing data for logging is hard with tokio::io::copy.
+                        // For MVP, we just pipe.
+                        tokio::io::copy(&mut ro, &mut wi).await 
+                    };
+
+                    tokio::select! {
+                        res = ctok => res?,
+                        res = stok => res?,
+                    };
+                    return Ok(());
+                }
+                Err(e) => {
+                    debug!("Attempt {} failed for proxy {}: {}", current_retry_attempt, proxy.to_string(true), e);
+                    if current_retry_attempt < max_retries {
+                        current_retry_attempt += 1;
+                        continue; // Retry same proxy
+                    } else {
+                        break; // Move to next proxy
+                    }
+                }
+            }
+        }
+
+        current_error_count += 1;
+        if max_errors >= 0 && current_error_count >= max_errors as usize {
+            error!("Max errors reached for request to {}:{}", target_host, target_port);
+            return Ok(());
+        }
+        // Rotate loop continues
+    }
+}
+
+async fn connect_to_upstream(
+    proxy: &Proxy,
+    target_host: &str,
+    target_port: u16,
+    _method: &str,
+    config: &crate::config::Config,
+) -> color_eyre::Result<TcpStream> {
+    use crate::errors::{ErrorCode, ProxySpiderError};
     let upstream_addr = format!("{}:{}", proxy.host, proxy.port);
-    debug!("Connecting to upstream {} for target {}:{}", upstream_addr, target_host, target_port);
-
-    let mut upstream_stream = TcpStream::connect(&upstream_addr)
+    let mut upstream_stream = tokio::time::timeout(config.server.timeout, TcpStream::connect(&upstream_addr))
         .await
+        .map_err(|_| ProxySpiderError::new(ErrorCode::Timeout, "connection timeout"))?
         .wrap_err("failed to connect to upstream")?;
 
     match proxy.protocol {
         crate::proxy::ProxyType::Socks5 => {
             // SOCKS5 Handshake
-            // 1. Auth negotiation
-            let auth_methods = if tor_isolation {
-                vec![0x02] // Username/Password
-            } else {
-                vec![0x00] // No auth
-            };
-            
+            let auth_methods = if config.server.tor_isolation { vec![0x02] } else { vec![0x00] };
             let mut handshake = vec![0x05, auth_methods.len() as u8];
             handshake.extend(auth_methods);
             upstream_stream.write_all(&handshake).await?;
@@ -170,13 +324,7 @@ async fn handle_connection(
             let mut response = [0u8; 2];
             upstream_stream.read_exact(&mut response).await?;
             
-            if response[0] != 0x05 {
-                 return Err(color_eyre::eyre::eyre!("Invalid SOCKS5 version"));
-            }
-
-            if response[1] == 0x02 && tor_isolation {
-                // Perform User/Pass Auth
-                // Generate random credentials
+            if response[1] == 0x02 && config.server.tor_isolation {
                 use rand::{Rng, SeedableRng};
                 use rand::rngs::StdRng;
                 let mut rng = StdRng::from_os_rng();
@@ -188,113 +336,38 @@ async fn handle_connection(
                 auth_req.extend_from_slice(username.as_bytes());
                 auth_req.push(password.len() as u8);
                 auth_req.extend_from_slice(password.as_bytes());
-                
                 upstream_stream.write_all(&auth_req).await?;
                 
                 let mut auth_res = [0u8; 2];
                 upstream_stream.read_exact(&mut auth_res).await?;
-                if auth_res[1] != 0x00 {
-                    return Err(color_eyre::eyre::eyre!("SOCKS5 Authentication failed"));
-                }
-            } else if response[1] == 0xFF {
-                return Err(color_eyre::eyre::eyre!("No acceptable SOCKS5 auth methods"));
+                if auth_res[1] != 0x00 { return Err(color_eyre::eyre::eyre!("SOCKS5 Authentication failed")); }
             }
 
-            // 2. Connect Request
-            // CMD=0x01 (CONNECT), ATYP=0x03 (Domain)
             let mut connect_req = vec![0x05, 0x01, 0x00, 0x03];
             connect_req.push(target_host.len() as u8);
             connect_req.extend_from_slice(target_host.as_bytes());
             connect_req.extend_from_slice(&target_port.to_be_bytes());
-            
             upstream_stream.write_all(&connect_req).await?;
             
             let mut connect_res = [0u8; 4];
             upstream_stream.read_exact(&mut connect_res).await?;
+            if connect_res[1] != 0x00 { return Err(color_eyre::eyre::eyre!("SOCKS5 Connection failed: {}", connect_res[1])); }
             
-            if connect_res[1] != 0x00 {
-                 return Err(color_eyre::eyre::eyre!("SOCKS5 Connection failed: {}", connect_res[1]));
-            }
-            
-            // Consume remaining address data
             let addr_type = connect_res[3];
             match addr_type {
-                0x01 => { // IPv4
-                    let mut buf = [0u8; 4+2];
-                    upstream_stream.read_exact(&mut buf).await?;
-                }
-                0x03 => { // Domain
+                0x01 => { upstream_stream.read_exact(&mut [0u8; 6]).await?; }
+                0x03 => {
                      let mut len = [0u8; 1];
                      upstream_stream.read_exact(&mut len).await?;
                      let mut buf = vec![0u8; len[0] as usize + 2];
                      upstream_stream.read_exact(&mut buf).await?;
                 }
-                0x04 => { // IPv6
-                    let mut buf = [0u8; 16+2];
-                    upstream_stream.read_exact(&mut buf).await?;
-                }
+                0x04 => { upstream_stream.read_exact(&mut [0u8; 18]).await?; }
                 _ => return Err(color_eyre::eyre::eyre!("Unknown address type")),
             }
         }
-        _ => {
-            // For HTTP proxies, we just assume they handle the request line we send next.
-            // But if it is CONNECT, we must handle the response "200 OK" from us? 
-            // OR we just pipe.
-            // If we are "dumb piping" to HTTP proxy, we send the original request.
-        }
+        _ => {}
     }
-
-    // Handshake done. Now pipe.
-    
-    // Important: If method is CONNECT, and we successfully connected to Upstream (SOCKS),
-    // we must send "200 Connection Established" to the Client *before* piping?
-    // - If Upstream is SOCKS: YES. The SOCKS handshake is done, stream is ready. We tell Client OK.
-    // - If Upstream is HTTP: We just forward the CONNECT request, and Upstream sends 200 OK.
-    
-    if method == "CONNECT" && matches!(proxy.protocol, crate::proxy::ProxyType::Socks5) {
-        client_stream.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n").await?;
-        
-        // We have consumed the "CONNECT ..." from client_stream? No, we PEEKED it.
-        // We must DISCARD it from the stream before piping.
-        // Reading it into buffer.
-        // Read until \r\n\r\n
-        // This is tricky without a buffered reader.
-        // Hack: Read `n` bytes that we peeked? 
-        // We peeked 4096, but n bytes were valid.
-        // Assuming the header fits in 4096 and we read it all.
-        // We need to read exactly the header length.
-        // Let's assume `request_str` contains the full header if it ends with \r\n\r\n
-        
-        // The `n` bytes we peeked might not be the full header or might contain body.
-        // Proper way: Read until end of headers.
-        
-        // MVP: Just read `n` bytes if request_str contains \r\n\r\n.
-        if let Some(pos) = request_str.find("\r\n\r\n") {
-             let header_len = pos + 4;
-             let mut header_buf = vec![0u8; header_len];
-             client_stream.read_exact(&mut header_buf).await?;
-        } else {
-             // Header larger than 4kb? Abort.
-             return Ok(());
-        }
-    } else if method == "HTTP" && matches!(proxy.protocol, crate::proxy::ProxyType::Socks5) {
-        // We need to forward the original GET request.
-        // But we peeked it. It is still in client_stream.
-        // So just piping is fine.
-    }
-
-    let (mut ri, mut wi) = client_stream.split();
-    let (mut ro, mut wo) = upstream_stream.split();
-
-    let client_to_server = async {
-        tokio::io::copy(&mut ri, &mut wo).await
-    };
-
-    let server_to_client = async {
-        tokio::io::copy(&mut ro, &mut wi).await
-    };
-
-    tokio::try_join!(client_to_server, server_to_client)?;
-
-    Ok(())
+    Ok(upstream_stream)
 }
+

@@ -10,5 +10,6 @@ services:
       - proxy_spider_cache:/home/app/.cache/proxy_spider
       - ./out:/home/app/.local/share/proxy_spider
       - ./config.toml:/app/config.toml
+
 volumes:
   proxy_spider_cache:

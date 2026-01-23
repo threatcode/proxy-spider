@@ -50,6 +50,7 @@
 pub mod checker;
 pub mod cli;
 pub mod config;
+pub mod daemon;
 pub mod errors;
 pub mod validation;
 #[cfg(feature = "tui")]
@@ -62,6 +63,7 @@ pub mod output;
 pub mod parsers;
 pub mod proxy;
 pub mod raw_config;
+pub mod resolver;
 pub mod scraper;
 pub mod server;
 #[cfg(feature = "tui")]
@@ -157,15 +159,22 @@ pub async fn main_task(
         event::Event,
     >,
 ) -> crate::Result<()> {
-    let dns_resolver = Arc::new(http::HickoryDnsResolver::new());
-    let http_client =
-        http::create_reqwest_client(&config, Arc::clone(&dns_resolver))
-            .wrap_err("failed to create reqwest HTTP client")?;
+    let dns_resolver = Arc::new(resolver::HickoryDnsResolver::new());
+    let http_client = http::create_client(
+        &config,
+        Arc::clone(&dns_resolver),
+        Some(config.scraping.timeout),
+    )
+    .wrap_err("failed to create reqwest HTTP client")?;
+
+    let ipdb_client =
+        http::create_client(&config, Arc::clone(&dns_resolver), None)
+            .wrap_err("failed to create IPDB HTTP client")?;
 
     let ((), mut proxies) = tokio::try_join!(
         download_output_dependencies(
             &config,
-            http_client.clone(),
+            ipdb_client,
             token.clone(),
             #[cfg(feature = "tui")]
             tx.clone(),
@@ -194,11 +203,10 @@ pub async fn main_task(
         pool.update(proxies);
         
         // Block main_task here until shutdown
-        server::start(
-            config.server.bind_addr,
+        let _server_future = server::start(
+            Arc::clone(&config),
             pool,
-            token,
-            config.server.tor_isolation,
+            token.clone(),
         )
         .await
         .wrap_err("proxy server failed")?;

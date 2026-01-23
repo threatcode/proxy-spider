@@ -73,6 +73,7 @@ pub struct ServerConfig {
     pub country_filter: Option<Vec<String>>,
     pub sync: bool,
     pub verbose: bool,
+    pub timeout: Duration,
     pub output: Option<PathBuf>,
 }
 
@@ -175,7 +176,7 @@ impl Config {
                 ]
                 .into_iter()
                 .filter_map(|(proxy_type, section)| {
-                    section.enabled.then(move || {
+                    section.enabled.then(|| {
                         (
                             proxy_type,
                             section
@@ -231,6 +232,7 @@ impl Config {
                 country_filter: None,
                 sync: false,
                 verbose: false,
+                timeout: Duration::from_secs(30),
                 output: None,
             },
         })

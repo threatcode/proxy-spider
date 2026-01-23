@@ -1,6 +1,5 @@
 use std::{
     io,
-    net::SocketAddr,
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -24,38 +23,6 @@ static RETRY_STATUSES: &[reqwest::StatusCode] = &[
 pub struct BasicAuth {
     pub username: String,
     pub password: Option<String>,
-}
-
-pub struct HickoryDnsResolver(Arc<hickory_resolver::TokioResolver>);
-
-impl HickoryDnsResolver {
-    pub fn new() -> Self {
-        let mut builder = hickory_resolver::TokioResolver::builder_tokio()
-            .unwrap_or_else(|_| {
-                hickory_resolver::TokioResolver::builder_with_config(
-                hickory_resolver::config::ResolverConfig::cloudflare(),
-                hickory_resolver::name_server::TokioConnectionProvider::default(
-                ),
-            )
-            });
-        builder.options_mut().ip_strategy =
-            hickory_resolver::config::LookupIpStrategy::Ipv4AndIpv6;
-        Self(Arc::new(builder.build()))
-    }
-}
-
-impl reqwest::dns::Resolve for HickoryDnsResolver {
-    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
-        let resolver = Arc::clone(&self.0);
-        Box::pin(async move {
-            let lookup = resolver.lookup_ip(name.as_str()).await?;
-            drop(resolver);
-            let addrs: reqwest::dns::Addrs = Box::new(
-                lookup.into_iter().map(|ip_addr| SocketAddr::new(ip_addr, 0)),
-            );
-            Ok(addrs)
-        })
-    }
 }
 
 fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
@@ -156,15 +123,20 @@ impl reqwest_middleware::Middleware for RetryMiddleware {
     }
 }
 
-pub fn create_reqwest_client<R: reqwest::dns::Resolve + 'static>(
+pub fn create_client<R: reqwest::dns::Resolve + 'static>(
     config: &Config,
     dns_resolver: Arc<R>,
+    timeout: Option<Duration>,
 ) -> reqwest::Result<reqwest_middleware::ClientWithMiddleware> {
     let mut builder = reqwest::ClientBuilder::new()
         .user_agent(&config.scraping.user_agent)
-        .timeout(config.scraping.timeout)
         .connect_timeout(config.scraping.connect_timeout)
+        .pool_idle_timeout(Duration::from_secs(5))
         .dns_resolver(dns_resolver);
+
+    if let Some(timeout) = timeout {
+        builder = builder.timeout(timeout);
+    }
 
     if let Some(proxy) = &config.scraping.proxy {
         builder = builder.proxy(reqwest::Proxy::all(proxy.clone())?);

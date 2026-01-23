@@ -10,7 +10,7 @@ max_proxies_per_source = 100000
 
 # Request timeout for fetching proxy sources (seconds)
 # Higher values may find more sources but take longer
-timeout = 60.0
+timeout = 30.0
 connect_timeout = 5.0
 
 # HTTP(S),SOCKS4 or SOCKS5 proxy used for fetching sources (e.g., "socks5://user:pass@host:port"). Leave empty to disable.
@@ -33,12 +33,12 @@ check_url = "https://api.ipify.org"
 
 # Concurrent proxy checks (adjust based on RAM/network capacity)
 # Start low and increase gradually if system handles it well
-max_concurrent_checks = 1024
+max_concurrent_checks = 512
 
 # Proxy response timeout (seconds)
 # Higher = more working proxies found, slower checking
 # Lower = faster checking, may miss slower proxies
-timeout = 60.0
+timeout = 20.0
 connect_timeout = 5.0
 
 # User-Agent header for proxy check requests

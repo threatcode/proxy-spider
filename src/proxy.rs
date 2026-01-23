@@ -1,5 +1,4 @@
 use std::{
-    fmt::Write as _,
     hash::{Hash, Hasher},
     str::FromStr,
     sync::Arc,
@@ -60,17 +59,21 @@ pub struct Proxy {
     pub exit_ip: Option<String>,
 }
 
+use compact_str::{CompactString, format_compact};
+
 impl TryFrom<&mut Proxy> for reqwest::Proxy {
     type Error = crate::Error;
 
+    #[inline]
     fn try_from(value: &mut Proxy) -> Result<Self, Self::Error> {
-        let proxy = Self::all(format!(
+        let url = format_compact!(
             "{}://{}:{}",
             value.protocol.as_str(),
             value.host,
             value.port
-        ))
-        .wrap_err("failed to create reqwest::Proxy")?;
+        );
+        let proxy = Self::all(url.as_str())
+            .wrap_err("failed to create reqwest::Proxy")?;
 
         if let (Some(username), Some(password)) =
             (value.username.as_ref(), value.password.as_ref())
@@ -132,8 +135,8 @@ impl Proxy {
         Ok(())
     }
 
-    pub fn to_string(&self, include_protocol: bool) -> String {
-        let mut s = String::new();
+    pub fn to_string(&self, include_protocol: bool) -> CompactString {
+        let mut s = CompactString::default();
 
         if include_protocol {
             s.push_str(self.protocol.as_str());
@@ -151,7 +154,7 @@ impl Proxy {
 
         s.push_str(&self.host);
         s.push(':');
-        write!(s, "{}", self.port).unwrap();
+        s.push_str(itoa::Buffer::new().format(self.port));
 
         s
     }

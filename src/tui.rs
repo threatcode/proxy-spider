@@ -20,6 +20,8 @@ use ratatui::{
 };
 use tui_logger::{TuiLoggerWidget, TuiWidgetEvent, TuiWidgetState};
 
+use compact_str::format_compact;
+
 use crate::{
     HashMap,
     event::{AppEvent, Event},
@@ -167,11 +169,11 @@ fn draw(f: &mut Frame<'_>, state: &AppState, logger_state: &TuiWidgetState) {
             .block(Block::bordered().title("Logs"))
             .output_file(false)
             .output_line(false)
-            .style_trace(Style::default().fg(Color::Magenta))
-            .style_debug(Style::default().fg(Color::Green))
-            .style_info(Style::default().fg(Color::Cyan))
-            .style_warn(Style::default().fg(Color::Yellow))
-            .style_error(Style::default().fg(Color::Red)),
+            .style_trace(Style::new().fg(Color::Magenta))
+            .style_debug(Style::new().fg(Color::Green))
+            .style_info(Style::new().fg(Color::Cyan))
+            .style_warn(Style::new().fg(Color::Yellow))
+            .style_error(Style::new().fg(Color::Red)),
         outer_layout[0],
     );
 
@@ -240,7 +242,7 @@ fn draw(f: &mut Frame<'_>, state: &AppState, logger_state: &TuiWidgetState) {
                     }
                 })
                 .block(Block::bordered().title("Scraping sources"))
-                .label(format!("{sources_scraped}/{sources_total}")),
+                .label(format_compact!("{sources_scraped}/{sources_total}").to_string()),
             layout[0],
         );
 
@@ -258,7 +260,7 @@ fn draw(f: &mut Frame<'_>, state: &AppState, logger_state: &TuiWidgetState) {
                     }
                 })
                 .block(Block::bordered().title("Checking proxies"))
-                .label(format!("{proxies_checked}/{proxies_total}")),
+                .label(format_compact!("{proxies_checked}/{proxies_total}").to_string()),
             layout[1],
         );
 
@@ -268,14 +270,14 @@ fn draw(f: &mut Frame<'_>, state: &AppState, logger_state: &TuiWidgetState) {
         let proxies_working =
             state.proxies_working.get(proxy_type).copied().unwrap_or_default();
         f.render_widget(
-            Line::from(format!("{} ({:.1}%)", proxies_working, {
+            Line::from(format_compact!("{} ({:.1}%)", proxies_working, {
                 if proxies_checked == 0 {
                     0.0_f64
                 } else {
                     (proxies_working as f64) / (proxies_checked as f64)
                         * 100.0_f64
                 }
-            }))
+            }).to_string())
             .alignment(Alignment::Center),
             working_proxies_block.inner(layout[2]),
         );

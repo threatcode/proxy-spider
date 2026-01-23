@@ -39,11 +39,8 @@ This tool makes many network requests and can impact your IP-address reputation.
 
 1. **Download** the appropriate binary from [nightly builds](https://nightly.link/threatcode/proxy-spider/workflows/ci/main?preview)
    - Not sure which one? Check the [platform support table](https://doc.rust-lang.org/beta/rustc/platform-support.html)
-
 2. **Extract** the archive to a dedicated folder
-
 3. **Configure** by editing `config.toml` to your needs
-
 4. **Run** the executable
 
 </details>
@@ -54,12 +51,9 @@ This tool makes many network requests and can impact your IP-address reputation.
 > **Note:** Docker version uses a simplified log-based interface (no TUI).
 
 1. **Install** [Docker Compose](https://docs.docker.com/compose/install/)
-
 2. **Download** the docker archive from [nightly builds](https://nightly.link/threatcode/proxy-spider/workflows/ci/main?preview)
    - Look for artifacts named `proxy-spider-docker`
-
 3. **Extract** to a folder and configure `config.toml`
-
 4. **Build and run:**
 
    ```bash
@@ -80,17 +74,13 @@ This tool makes many network requests and can impact your IP-address reputation.
 > **Important:** Download Termux from [F-Droid](https://f-droid.org/en/packages/com.termux/), not Google Play ([why?](https://github.com/termux/termux-app#google-play-store-experimental-branch)).
 
 1. **Auto-install** with one command:
-
    ```bash
    bash <(curl -fsSL 'https://raw.githubusercontent.com/threatcode/proxy-spider/main/termux.sh')
    ```
-
 2. **Configure** using a text editor:
-
    ```bash
    nano ~/proxy-spider/config.toml
    ```
-
 3. **Run the tool:**
    ```bash
    cd ~/proxy-spider && ./proxy-spider
@@ -103,6 +93,10 @@ This tool makes many network requests and can impact your IP-address reputation.
 [MIT](LICENSE)
 
 _This product includes GeoLite2 Data created by MaxMind, available from https://www.maxmind.com_
+
+## 💖 Support
+
+This project is maintained by [threatcode](https://github.com/threatcode). If you find it useful, please consider [sponsoring us on GitHub](https://github.com/sponsors/threatcode) to support ongoing development and maintenance.
 
 ## 🤝 Contributing
 

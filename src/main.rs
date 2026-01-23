@@ -47,10 +47,14 @@
     clippy::unwrap_used
 )]
 
-#[cfg(all(feature = "dhat", feature = "mimalloc"))]
+#[cfg(any(
+    all(feature = "dhat", feature = "mimalloc"),
+    all(feature = "dhat", feature = "jemalloc"),
+    all(feature = "mimalloc", feature = "jemalloc"),
+))]
 compile_error!(
-    "Features 'dhat-heap' and 'mimalloc' are mutually exclusive. Enable only \
-     one."
+    "Features 'dhat', 'mimalloc', and 'jemalloc' are mutually exclusive. \
+     Enable only one."
 );
 
 use color_eyre::eyre::WrapErr as _;
@@ -63,10 +67,14 @@ static GLOBAL: dhat::Alloc = dhat::Alloc;
 #[cfg(all(
     feature = "mimalloc",
     any(target_arch = "aarch64", target_arch = "x86_64"),
-    any(target_os = "linux", target_os = "macos", target_os = "windows"),
+    any(target_os = "linux", target_os = "macos"),
 ))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+#[cfg(all(feature = "jemalloc", not(target_os = "windows")))]
+#[global_allocator]
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 #[tokio::main]
 #[expect(clippy::unwrap_in_result)]
@@ -79,6 +87,12 @@ async fn main() -> color_eyre::Result<()> {
     proxy_spider::metrics::init(None).wrap_err("failed to initialize metrics")?;
 
     let cli = proxy_spider::cli::Cli::parse();
+
+    if cli.daemon {
+        proxy_spider::daemon::setup_daemon(std::env::args().collect())?;
+        return Ok(());
+    }
+
     let mut config = config::load_config().await?;
     cli.apply_to_config(Arc::make_mut(&mut config));
     let logging_filter = create_logging_filter(&config);

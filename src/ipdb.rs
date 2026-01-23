@@ -35,10 +35,10 @@ impl DbType {
     async fn db_path(self) -> crate::Result<PathBuf> {
         let mut cache_path =
             get_cache_path().await.wrap_err("failed to get cache path")?;
-        match self {
-            Self::Asn => cache_path.push("asn_database.mmdb"),
-            Self::Geo => cache_path.push("geolocation_database.mmdb"),
-        }
+        cache_path.push(match self {
+            Self::Asn => "asn_database.mmdb",
+            Self::Geo => "geolocation_database.mmdb",
+        });
         Ok(cache_path)
     }
 
@@ -62,10 +62,12 @@ impl DbType {
         ))));
 
         let db_path = self.db_path().await?;
-        let mut file =
+        let file =
             tokio::fs::File::create(&db_path).await.wrap_err_with(|| {
                 format!("failed to create file {}", db_path.display())
             })?;
+        let mut writer = tokio::io::BufWriter::new(file);
+
         while let Some(chunk) =
             response.chunk().await.wrap_err_with(move || {
                 format!(
@@ -74,7 +76,7 @@ impl DbType {
                 )
             })?
         {
-            file.write_all(&chunk).await.wrap_err_with(|| {
+            writer.write_all(&chunk).await.wrap_err_with(|| {
                 format!("failed to write to file {}", db_path.display())
             })?;
             #[cfg(feature = "tui")]
@@ -85,6 +87,9 @@ impl DbType {
                 ))),
             );
         }
+        writer.flush().await.wrap_err_with(|| {
+            format!("failed to flush file {}", db_path.display())
+        })?;
         Ok(())
     }
 
