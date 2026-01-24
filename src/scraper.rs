@@ -1,4 +1,11 @@
+//! Proxy scraper module.
+//!
+//! This module provides the logic for scraping proxy addresses from various sources
+//! (HTTP, HTTPS, and local files) in parallel. It uses a regex-based parser
+//! to extract proxy addresses from arbitrary text content.
+
 use std::sync::Arc;
+use std::time::Instant;
 
 use color_eyre::eyre::{OptionExt as _, WrapErr as _};
 use foldhash::HashSetExt as _;
@@ -21,6 +28,7 @@ async fn scrape_one(
     source: Arc<Source>,
     #[cfg(feature = "tui")] tx: tokio::sync::mpsc::UnboundedSender<Event>,
 ) -> crate::Result<()> {
+    let start = Instant::now();
     let text_result = if let Ok(u) = url::Url::parse(&source.url) {
         match u.scheme() {
             "http" | "https" => {
@@ -57,12 +65,16 @@ async fn scrape_one(
         tokio::fs::read_to_string(&source.url).await.map_err(Into::into)
     };
 
+    metrics::histogram!("scrape_duration_seconds", "protocol" => proto.as_str())
+        .record(start.elapsed().as_secs_f64());
+
     #[cfg(feature = "tui")]
     drop(tx.send(Event::App(AppEvent::SourceScraped(proto))));
 
     let text = match text_result {
         Ok(text) => text,
         Err(e) => {
+            metrics::counter!("scrape_errors_total", "protocol" => proto.as_str()).increment(1);
             tracing::warn!("{}: {}", source.url, pretty_error(&e));
             return Ok(());
         }
@@ -116,6 +128,8 @@ async fn scrape_one(
                     .map(|m| m.as_str().to_owned()),
                 timeout: None,
                 exit_ip: None,
+                anonymity: None,
+                score: None,
             });
         }
     }
@@ -127,6 +141,9 @@ async fn scrape_one(
         tracing::warn!("{}: no proxies found", source.url);
         return Ok(());
     }
+
+    metrics::counter!("proxies_scraped_total", "protocol" => proto.as_str())
+        .increment(new_proxies.len() as u64);
 
     drop(source);
 
@@ -144,6 +161,14 @@ async fn scrape_one(
     Ok(())
 }
 
+/// Scrapes all configured sources in parallel.
+///
+/// This function coordinates the scraping of all sources defined in the configuration.
+/// It returns a deduplicated collection of [`Proxy`] objects.
+///
+/// # Errors
+///
+/// Returns an error if any scraping task fails or is cancelled unexpectedly.
 pub async fn scrape_all(
     config: Arc<Config>,
     http_client: reqwest_middleware::ClientWithMiddleware,
@@ -165,9 +190,12 @@ pub async fn scrape_all(
             let source = Arc::clone(source);
             #[cfg(feature = "tui")]
             let tx = tx.clone();
+
+            // Spawn each scraping task in a JoinSet for efficient management
             join_set.spawn(async move {
                 tokio::select! {
                     biased;
+                    // Primary work: scrape one source
                     res = scrape_one(
                         config,
                         http_client,
@@ -177,6 +205,7 @@ pub async fn scrape_all(
                         #[cfg(feature = "tui")]
                         tx,
                     ) => res,
+                    // Cancellation: stop if the token is triggered
                     () = token.cancelled() => Ok(()),
                 }
             });

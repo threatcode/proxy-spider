@@ -1,3 +1,8 @@
+//! IP database management (GeoIP and ASN).
+//!
+//! This module handles downloading, caching, and opening MaxMind database files
+//! used for enriching proxy data with geographic and network information.
+
 use std::{io, path::PathBuf};
 
 use color_eyre::eyre::{WrapErr as _, eyre};
@@ -7,9 +12,12 @@ use tokio::io::AsyncWriteExt as _;
 use crate::event::{AppEvent, Event};
 use crate::{fs::get_cache_path, utils::is_docker};
 
+/// Supported IP database types.
 #[derive(Clone, Copy)]
 pub enum DbType {
+    /// Autonomous System Number database.
     Asn,
+    /// Geolocation database.
     Geo,
 }
 
@@ -35,10 +43,10 @@ impl DbType {
     async fn db_path(self) -> crate::Result<PathBuf> {
         let mut cache_path =
             get_cache_path().await.wrap_err("failed to get cache path")?;
-        match self {
-            Self::Asn => cache_path.push("asn_database.mmdb"),
-            Self::Geo => cache_path.push("geolocation_database.mmdb"),
-        }
+        cache_path.push(match self {
+            Self::Asn => "asn_database.mmdb",
+            Self::Geo => "geolocation_database.mmdb",
+        });
         Ok(cache_path)
     }
 
@@ -62,10 +70,12 @@ impl DbType {
         ))));
 
         let db_path = self.db_path().await?;
-        let mut file =
+        let file =
             tokio::fs::File::create(&db_path).await.wrap_err_with(|| {
                 format!("failed to create file {}", db_path.display())
             })?;
+        let mut writer = tokio::io::BufWriter::new(file);
+
         while let Some(chunk) =
             response.chunk().await.wrap_err_with(move || {
                 format!(
@@ -74,7 +84,7 @@ impl DbType {
                 )
             })?
         {
-            file.write_all(&chunk).await.wrap_err_with(|| {
+            writer.write_all(&chunk).await.wrap_err_with(|| {
                 format!("failed to write to file {}", db_path.display())
             })?;
             #[cfg(feature = "tui")]
@@ -85,6 +95,9 @@ impl DbType {
                 ))),
             );
         }
+        writer.flush().await.wrap_err_with(|| {
+            format!("failed to flush file {}", db_path.display())
+        })?;
         Ok(())
     }
 
@@ -119,6 +132,11 @@ impl DbType {
         }
     }
 
+    /// Downloads the latest version of the database if it's not already cached.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the download fails or if the file cannot be saved.
     pub async fn download(
         self,
         http_client: reqwest_middleware::ClientWithMiddleware,
@@ -209,6 +227,11 @@ impl DbType {
         }
     }
 
+    /// Opens the database file using memory mapping.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be opened or if memory mapping fails.
     pub async fn open_mmap(
         self,
     ) -> crate::Result<maxminddb::Reader<maxminddb::Mmap>> {

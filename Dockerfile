@@ -5,12 +5,12 @@ FROM docker.io/rust:slim-trixie AS builder
 WORKDIR /app
 
 RUN --mount=source=src,target=src \
-  --mount=source=Cargo.toml,target=Cargo.toml \
-  --mount=source=Cargo.lock,target=Cargo.lock \
-  --mount=type=cache,target=/app/target,sharing=locked \
-  --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
-  cargo build --features mimalloc --release --locked \
-  && cp target/release/proxy-spider .
+    --mount=source=Cargo.toml,target=Cargo.toml \
+    --mount=source=Cargo.lock,target=Cargo.lock \
+    --mount=type=cache,target=/app/target,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    cargo build --features mimalloc --release --locked \
+    && cp target/release/proxy-spider .
 
 
 FROM docker.io/debian:trixie-slim AS final
@@ -19,21 +19,22 @@ WORKDIR /app
 
 
 RUN rm -f /etc/apt/apt.conf.d/docker-clean \
-  && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+    && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-  --mount=type=cache,target=/var/lib/apt,sharing=locked \
-  apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 ARG \
-  UID=1000 \
-  GID=1000
+    UID=1000 \
+    GID=1000
 
 RUN (getent group "${GID}" || groupadd --gid "${GID}" app) \
-  && useradd --gid "${GID}" --no-log-init --create-home --uid "${UID}" app \
-  && mkdir -p /home/app/.cache/proxy_spider \
-  && chown ${UID}:${GID} /home/app/.cache/proxy_spider
+    && useradd --gid "${GID}" --no-log-init --create-home --uid "${UID}" app \
+    && mkdir -p /home/app/.cache/proxy_spider \
+    && chown ${UID}:${GID} /home/app/.cache/proxy_spider
 
 COPY --from=builder --chown=${UID}:${GID} --link /app/proxy-spider .
 
