@@ -4,6 +4,11 @@
     clippy::wildcard_enum_match_arm
 )]
 
+//! Terminal User Interface (TUI) for proxy-spider.
+//!
+//! This module implements a comprehensive TUI using `ratatui` for monitoring
+//! the scraping and checking progress in real-time.
+
 use std::time::Duration;
 
 use color_eyre::eyre::WrapErr as _;
@@ -31,6 +36,7 @@ use crate::{
 
 const FPS: f64 = 30.0;
 
+/// A guard that restores the terminal to its original state when dropped.
 pub struct RatatuiRestoreGuard;
 impl Drop for RatatuiRestoreGuard {
     fn drop(&mut self) {
@@ -38,6 +44,13 @@ impl Drop for RatatuiRestoreGuard {
     }
 }
 
+/// Runs the TUI loop.
+///
+/// This function initializes the UI, handles events, and draws the various components.
+///
+/// # Errors
+///
+/// Returns an error if drawing fails or if event handling fails.
 pub async fn run(
     mut terminal: ratatui::DefaultTerminal,
     token: tokio_util::sync::CancellationToken,
@@ -242,7 +255,10 @@ fn draw(f: &mut Frame<'_>, state: &AppState, logger_state: &TuiWidgetState) {
                     }
                 })
                 .block(Block::bordered().title("Scraping sources"))
-                .label(format_compact!("{sources_scraped}/{sources_total}").to_string()),
+                .label(
+                    format_compact!("{sources_scraped}/{sources_total}")
+                        .to_string(),
+                ),
             layout[0],
         );
 
@@ -260,7 +276,10 @@ fn draw(f: &mut Frame<'_>, state: &AppState, logger_state: &TuiWidgetState) {
                     }
                 })
                 .block(Block::bordered().title("Checking proxies"))
-                .label(format_compact!("{proxies_checked}/{proxies_total}").to_string()),
+                .label(
+                    format_compact!("{proxies_checked}/{proxies_total}")
+                        .to_string(),
+                ),
             layout[1],
         );
 
@@ -270,14 +289,17 @@ fn draw(f: &mut Frame<'_>, state: &AppState, logger_state: &TuiWidgetState) {
         let proxies_working =
             state.proxies_working.get(proxy_type).copied().unwrap_or_default();
         f.render_widget(
-            Line::from(format_compact!("{} ({:.1}%)", proxies_working, {
-                if proxies_checked == 0 {
-                    0.0_f64
-                } else {
-                    (proxies_working as f64) / (proxies_checked as f64)
-                        * 100.0_f64
-                }
-            }).to_string())
+            Line::from(
+                format_compact!("{} ({:.1}%)", proxies_working, {
+                    if proxies_checked == 0 {
+                        0.0_f64
+                    } else {
+                        (proxies_working as f64) / (proxies_checked as f64)
+                            * 100.0_f64
+                    }
+                })
+                .to_string(),
+            )
             .alignment(Alignment::Center),
             working_proxies_block.inner(layout[2]),
         );

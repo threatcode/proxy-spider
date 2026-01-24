@@ -1,3 +1,23 @@
+//! # Proxy-Spider
+//!
+//! `proxy-spider` is a lightning-fast, asynchronous proxy scraper and checker in Rust.
+//! It supports multiple proxy protocols (HTTP, SOCKS4, SOCKS5), custom sources,
+//! and provides both a CLI and an optional TUI for monitoring.
+//!
+//! ## Core Components
+//!
+//! - **Scraper**: Collects proxy addresses from various sources (HTTP/HTTPS/File).
+//! - **Checker**: Validates proxies by testing their connectivity and anonymity.
+//! - **Output**: Saves working proxies in various formats (TXT, JSON).
+//! - **Server**: (Optional) Provides a proxy rotation service.
+//!
+//! ## Feature Flags
+//!
+//! - `tui`: Enables the Terminal User Interface.
+//! - `jemalloc`: Uses jemalloc as the memory allocator.
+//! - `mimalloc`: Uses mimalloc as the memory allocator.
+//! - `dhat`: Enables DHAT for memory profiling.
+
 #![deny(
     warnings,
     deprecated_safe,
@@ -52,7 +72,6 @@ pub mod cli;
 pub mod config;
 pub mod daemon;
 pub mod errors;
-pub mod validation;
 #[cfg(feature = "tui")]
 pub mod event;
 pub mod fs;
@@ -69,6 +88,7 @@ pub mod server;
 #[cfg(feature = "tui")]
 pub mod tui;
 pub mod utils;
+pub mod validation;
 
 use std::sync::Arc;
 
@@ -77,12 +97,23 @@ use tracing_subscriber::{
     layer::SubscriberExt as _, util::SubscriberInitExt as _,
 };
 
+/// Re-export of `color_eyre::Report` for convenience.
 pub type Error = color_eyre::Report;
+
+/// Result type used throughout the project, based on `color_eyre::Result`.
 pub type Result<T> = color_eyre::Result<T>;
 
+/// Internal `HashMap` type using `foldhash` for better performance.
 pub type HashMap<K, V> = foldhash::HashMap<K, V>;
+
+/// Internal `HashSet` type using `foldhash` for better performance.
 pub type HashSet<T> = foldhash::HashSet<T>;
 
+/// Creates a tracing logging filter based on the configuration.
+///
+/// This filter determines which logs are emitted based on the `debug` setting in the config.
+#[inline]
+#[must_use]
 pub fn create_logging_filter(
     config: &config::Config,
 ) -> tracing_subscriber::filter::Targets {
@@ -103,6 +134,12 @@ pub fn create_logging_filter(
     }
 }
 
+/// Downloads optional dependencies for output (like `GeoIP` and ASN databases).
+///
+/// # Errors
+///
+/// Returns an error if a download fails and it's not a cancellation.
+#[inline]
 pub async fn download_output_dependencies(
     config: &config::Config,
     http_client: reqwest_middleware::ClientWithMiddleware,
@@ -152,6 +189,12 @@ pub async fn download_output_dependencies(
     Ok(())
 }
 
+/// The main application task that coordinates scraping, checking, and output/server.
+///
+/// # Errors
+///
+/// Returns an error if any of the major components (scraper, checker, server) fail.
+#[inline]
 pub async fn main_task(
     config: Arc<config::Config>,
     token: tokio_util::sync::CancellationToken,
@@ -190,7 +233,7 @@ pub async fn main_task(
 
     proxies = checker::check_all(
         Arc::clone(&config),
-        dns_resolver,
+        Arc::clone(&dns_resolver),
         proxies,
         token.clone(),
         #[cfg(feature = "tui")]
@@ -201,21 +244,17 @@ pub async fn main_task(
     if config.server.enabled {
         let pool = server::ProxyPool::new();
         pool.update(proxies);
-        
+
         // Block main_task here until shutdown
-        let _server_future = server::start(
-            Arc::clone(&config),
-            pool,
-            token.clone(),
-        )
-        .await
-        .wrap_err("proxy server failed")?;
+        server::start(Arc::clone(&config), pool, token.clone())
+            .await
+            .wrap_err("proxy server failed")?;
     } else {
         // Only output and exit if server not enabled
-        output::save_proxies(config, proxies)
+        output::save_proxies(config, proxies, dns_resolver)
             .await
             .wrap_err("failed to save proxies")?;
-         tracing::info!("Thank you for using proxy-spider!");
+        tracing::info!("Thank you for using proxy-spider!");
     }
 
     #[cfg(feature = "tui")]

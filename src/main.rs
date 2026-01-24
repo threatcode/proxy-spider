@@ -47,18 +47,10 @@
     clippy::unwrap_used
 )]
 
-#[cfg(any(
-    all(feature = "dhat", feature = "mimalloc"),
-    all(feature = "dhat", feature = "jemalloc"),
-    all(feature = "mimalloc", feature = "jemalloc"),
-))]
-compile_error!(
-    "Features 'dhat', 'mimalloc', and 'jemalloc' are mutually exclusive. \
-     Enable only one."
-);
-
+use clap::Parser as _;
 use color_eyre::eyre::WrapErr as _;
 use proxy_spider::{config, create_logging_filter};
+use std::sync::Arc;
 
 #[cfg(feature = "dhat")]
 #[global_allocator]
@@ -66,13 +58,20 @@ static GLOBAL: dhat::Alloc = dhat::Alloc;
 
 #[cfg(all(
     feature = "mimalloc",
+    not(feature = "dhat"),
+    not(feature = "jemalloc"),
     any(target_arch = "aarch64", target_arch = "x86_64"),
     any(target_os = "linux", target_os = "macos"),
 ))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-#[cfg(all(feature = "jemalloc", not(target_os = "windows")))]
+#[cfg(all(
+    feature = "jemalloc",
+    not(feature = "dhat"),
+    not(feature = "mimalloc"),
+    not(target_os = "windows")
+))]
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
@@ -84,7 +83,8 @@ async fn main() -> color_eyre::Result<()> {
 
     color_eyre::install().wrap_err("failed to install color_eyre hooks")?;
 
-    proxy_spider::metrics::init(None).wrap_err("failed to initialize metrics")?;
+    proxy_spider::metrics::init(None)
+        .wrap_err("failed to initialize metrics")?;
 
     let cli = proxy_spider::cli::Cli::parse();
 

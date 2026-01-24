@@ -78,6 +78,7 @@ mimalloc = { version = "=0.1.48", optional = true, features = ["v3"] }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
+mockito = "1.7.1"
 tokio-test = "0.4"
 
 [features]

@@ -120,6 +120,7 @@ pub struct CheckingConfig {
 #[derive(serde::Deserialize)]
 pub struct TxtOutputConfig {
     pub enabled: bool,
+    pub format: Option<String>,
 }
 
 #[derive(serde::Deserialize)]

@@ -46,8 +46,10 @@ fn test_proxy_to_string_without_protocol() {
         password: None,
         timeout: None,
         exit_ip: None,
+        anonymity: None,
+        score: None,
     };
-    
+
     assert_eq!(proxy.to_string(false), "192.168.1.1:8080");
 }
 
@@ -61,8 +63,10 @@ fn test_proxy_to_string_with_protocol() {
         password: None,
         timeout: None,
         exit_ip: None,
+        anonymity: None,
+        score: None,
     };
-    
+
     assert_eq!(proxy.to_string(true), "http://192.168.1.1:8080");
 }
 
@@ -76,8 +80,10 @@ fn test_proxy_to_string_with_auth() {
         password: Some("pass".to_string()),
         timeout: None,
         exit_ip: None,
+        anonymity: None,
+        score: None,
     };
-    
+
     assert_eq!(proxy.to_string(false), "user:pass@10.0.0.1:1080");
     assert_eq!(proxy.to_string(true), "socks5://user:pass@10.0.0.1:1080");
 }
@@ -92,10 +98,12 @@ fn test_proxy_is_checked() {
         password: None,
         timeout: None,
         exit_ip: None,
+        anonymity: None,
+        score: None,
     };
-    
+
     assert!(!proxy.is_checked());
-    
+
     proxy.timeout = Some(std::time::Duration::from_secs(1));
     assert!(proxy.is_checked());
 }
@@ -110,8 +118,10 @@ fn test_proxy_equality() {
         password: None,
         timeout: None,
         exit_ip: None,
+        anonymity: None,
+        score: None,
     };
-    
+
     let proxy2 = Proxy {
         protocol: ProxyType::Http,
         host: "192.168.1.1".to_string(),
@@ -120,8 +130,10 @@ fn test_proxy_equality() {
         password: None,
         timeout: Some(std::time::Duration::from_secs(1)),
         exit_ip: Some("1.2.3.4".to_string()),
+        anonymity: None,
+        score: None,
     };
-    
+
     // Proxies are equal if protocol, host, port, username, and password match
     // timeout and exit_ip are not considered
     assert_eq!(proxy1, proxy2);
@@ -137,8 +149,10 @@ fn test_proxy_inequality_different_host() {
         password: None,
         timeout: None,
         exit_ip: None,
+        anonymity: None,
+        score: None,
     };
-    
+
     let proxy2 = Proxy {
         protocol: ProxyType::Http,
         host: "192.168.1.2".to_string(),
@@ -147,8 +161,10 @@ fn test_proxy_inequality_different_host() {
         password: None,
         timeout: None,
         exit_ip: None,
+        anonymity: None,
+        score: None,
     };
-    
+
     assert_ne!(proxy1, proxy2);
 }
 
@@ -162,8 +178,10 @@ fn test_proxy_inequality_different_port() {
         password: None,
         timeout: None,
         exit_ip: None,
+        anonymity: None,
+        score: None,
     };
-    
+
     let proxy2 = Proxy {
         protocol: ProxyType::Http,
         host: "192.168.1.1".to_string(),
@@ -172,8 +190,10 @@ fn test_proxy_inequality_different_port() {
         password: None,
         timeout: None,
         exit_ip: None,
+        anonymity: None,
+        score: None,
     };
-    
+
     assert_ne!(proxy1, proxy2);
 }
 
@@ -187,8 +207,10 @@ fn test_proxy_inequality_different_protocol() {
         password: None,
         timeout: None,
         exit_ip: None,
+        anonymity: None,
+        score: None,
     };
-    
+
     let proxy2 = Proxy {
         protocol: ProxyType::Socks5,
         host: "192.168.1.1".to_string(),
@@ -197,15 +219,17 @@ fn test_proxy_inequality_different_protocol() {
         password: None,
         timeout: None,
         exit_ip: None,
+        anonymity: None,
+        score: None,
     };
-    
+
     assert_ne!(proxy1, proxy2);
 }
 
 #[test]
 fn test_proxy_hash_consistency() {
     use std::collections::HashSet;
-    
+
     let proxy1 = Proxy {
         protocol: ProxyType::Http,
         host: "192.168.1.1".to_string(),
@@ -214,8 +238,10 @@ fn test_proxy_hash_consistency() {
         password: None,
         timeout: None,
         exit_ip: None,
+        anonymity: None,
+        score: None,
     };
-    
+
     let proxy2 = Proxy {
         protocol: ProxyType::Http,
         host: "192.168.1.1".to_string(),
@@ -224,11 +250,13 @@ fn test_proxy_hash_consistency() {
         password: None,
         timeout: Some(std::time::Duration::from_secs(1)),
         exit_ip: Some("1.2.3.4".to_string()),
+        anonymity: None,
+        score: None,
     };
-    
+
     let mut set = HashSet::new();
     set.insert(proxy1);
-    
+
     // proxy2 should be considered a duplicate since it has the same hash
     assert!(!set.insert(proxy2));
     assert_eq!(set.len(), 1);
@@ -237,7 +265,7 @@ fn test_proxy_hash_consistency() {
 #[test]
 fn test_proxy_deduplication() {
     use std::collections::HashSet;
-    
+
     let proxies = vec![
         Proxy {
             protocol: ProxyType::Http,
@@ -247,6 +275,8 @@ fn test_proxy_deduplication() {
             password: None,
             timeout: None,
             exit_ip: None,
+            anonymity: None,
+            score: None,
         },
         Proxy {
             protocol: ProxyType::Http,
@@ -256,6 +286,8 @@ fn test_proxy_deduplication() {
             password: None,
             timeout: Some(std::time::Duration::from_secs(1)),
             exit_ip: None,
+            anonymity: None,
+            score: None,
         },
         Proxy {
             protocol: ProxyType::Http,
@@ -265,9 +297,11 @@ fn test_proxy_deduplication() {
             password: None,
             timeout: None,
             exit_ip: None,
+            anonymity: None,
+            score: None,
         },
     ];
-    
+
     let unique: HashSet<_> = proxies.into_iter().collect();
     assert_eq!(unique.len(), 2); // First two are duplicates
 }

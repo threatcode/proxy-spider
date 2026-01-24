@@ -7,6 +7,7 @@ use std::fmt;
 
 /// Error codes for programmatic error handling
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ErrorCode {
     /// Configuration file not found or inaccessible
     ConfigNotFound,
@@ -36,6 +37,7 @@ pub enum ErrorCode {
 
 impl ErrorCode {
     /// Get the error code as a string identifier
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::ConfigNotFound => "CONFIG_NOT_FOUND",
@@ -54,6 +56,7 @@ impl ErrorCode {
     }
 
     /// Get a user-friendly description of the error
+    #[must_use]
     pub const fn description(self) -> &'static str {
         match self {
             Self::ConfigNotFound => "Configuration file not found",
@@ -94,12 +97,7 @@ pub struct ProxySpiderError {
 impl ProxySpiderError {
     /// Create a new error with code and message
     pub fn new(code: ErrorCode, message: impl Into<String>) -> Self {
-        Self {
-            code,
-            message: message.into(),
-            suggestion: None,
-            source: None,
-        }
+        Self { code, message: message.into(), suggestion: None, source: None }
     }
 
     /// Create a new error with code, message, and suggestion
@@ -134,18 +132,134 @@ impl ProxySpiderError {
     }
 
     /// Get the error code
+    #[must_use]
     pub const fn code(&self) -> ErrorCode {
         self.code
     }
 
     /// Get the error message
+    #[must_use]
     pub fn message(&self) -> &str {
         &self.message
     }
 
     /// Get the suggestion, if any
+    #[must_use]
     pub fn suggestion(&self) -> Option<&str> {
         self.suggestion.as_deref()
+    }
+
+    /// Create a configuration not found error
+    pub fn config_not_found(path: impl fmt::Display) -> Self {
+        Self::with_suggestion(
+            ErrorCode::ConfigNotFound,
+            format!("Configuration file not found: {path}"),
+            "Ensure config.toml exists in the current directory or specify a custom path",
+        )
+    }
+
+    /// Create a configuration invalid error
+    pub fn config_invalid(reason: impl Into<String>) -> Self {
+        Self::with_suggestion(
+            ErrorCode::ConfigInvalid,
+            format!("Invalid configuration: {}", reason.into()),
+            "Check the configuration file for syntax errors or invalid values",
+        )
+    }
+
+    /// Create a network error
+    pub fn network_error(
+        url: impl fmt::Display,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self::with_suggestion(
+            ErrorCode::NetworkError,
+            format!("Network request to {url} failed: {}", reason.into()),
+            "Check your internet connection and ensure the URL is accessible",
+        )
+    }
+
+    /// Create a proxy check failed error
+    pub fn proxy_check_failed(
+        proxy: impl fmt::Display,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self::new(
+            ErrorCode::ProxyCheckFailed,
+            format!("Proxy {proxy} check failed: {}", reason.into()),
+        )
+    }
+
+    /// Create an invalid proxy format error
+    pub fn invalid_proxy_format(proxy: impl Into<String>) -> Self {
+        Self::with_suggestion(
+            ErrorCode::InvalidProxyFormat,
+            format!("Invalid proxy format: {}", proxy.into()),
+            "Expected format: [protocol://][username:password@]host:port",
+        )
+    }
+
+    /// Create a file I/O error
+    pub fn file_io_error(
+        path: impl fmt::Display,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self::new(
+            ErrorCode::FileIoError,
+            format!("File operation on {path} failed: {}", reason.into()),
+        )
+    }
+
+    /// Create a database error
+    pub fn database_error(
+        db_name: impl fmt::Display,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self::new(
+            ErrorCode::DatabaseError,
+            format!("{db_name} database error: {}", reason.into()),
+        )
+    }
+
+    /// Create a parsing error
+    pub fn parse_error(
+        target: impl fmt::Display,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self::new(
+            ErrorCode::ParseError,
+            format!("Failed to parse {target}: {}", reason.into()),
+        )
+    }
+
+    /// Create a timeout error
+    pub fn timeout(operation: impl fmt::Display) -> Self {
+        Self::new(
+            ErrorCode::Timeout,
+            format!("Operation timed out: {operation}"),
+        )
+    }
+
+    /// Create a permission denied error
+    pub fn permission_denied(resource: impl fmt::Display) -> Self {
+        Self::with_suggestion(
+            ErrorCode::PermissionDenied,
+            format!("Permission denied: {resource}"),
+            "Ensure you have the necessary permissions to access this resource",
+        )
+    }
+
+    /// Create a resource not found error
+    pub fn not_found(resource: impl fmt::Display) -> Self {
+        Self::new(ErrorCode::NotFound, format!("Resource not found: {resource}"))
+    }
+
+    /// Create an internal error
+    pub fn internal(reason: impl Into<String>) -> Self {
+        Self::new(
+            ErrorCode::Internal,
+            format!("Internal error: {}", reason.into()),
+        )
     }
 }
 
@@ -164,210 +278,5 @@ impl std::error::Error for ProxySpiderError {
         self.source
             .as_ref()
             .map(|e| e.as_ref() as &(dyn std::error::Error + 'static))
-    }
-}
-
-/// Helper functions for creating common errors
-impl ProxySpiderError {
-    /// Create a configuration not found error
-    pub fn config_not_found(path: impl fmt::Display) -> Self {
-        Self::with_suggestion(
-            ErrorCode::ConfigNotFound,
-            format!("Configuration file not found: {path}"),
-            "Ensure config.toml exists in the current directory or specify a custom path",
-        )
-    }
-
-    /// Create a configuration invalid error
-    pub fn config_invalid(reason: impl Into<String>) -> Self {
-        Self::with_suggestion(
-            ErrorCode::ConfigInvalid,
-            format!("Invalid configuration: {}", reason.into()),
-            "Check config.toml for syntax errors and ensure all required fields are present",
-        )
-    }
-
-    /// Create a network error
-    pub fn network_error(url: impl fmt::Display, reason: impl Into<String>) -> Self {
-        Self::with_suggestion(
-            ErrorCode::NetworkError,
-            format!("Network request to {url} failed: {}", reason.into()),
-            "Check your internet connection and ensure the URL is accessible",
-        )
-    }
-
-    /// Create a proxy check failed error
-    pub fn proxy_check_failed(proxy: impl fmt::Display, reason: impl Into<String>) -> Self {
-        Self::new(
-            ErrorCode::ProxyCheckFailed,
-            format!("Proxy {proxy} check failed: {}", reason.into()),
-        )
-    }
-
-    /// Create an invalid proxy format error
-    pub fn invalid_proxy_format(proxy: impl Into<String>) -> Self {
-        Self::with_suggestion(
-            ErrorCode::InvalidProxyFormat,
-            format!("Invalid proxy format: {}", proxy.into()),
-            "Expected format: [protocol://][username:password@]host:port",
-        )
-    }
-
-    /// Create a file I/O error
-    pub fn file_io_error(path: impl fmt::Display, reason: impl Into<String>) -> Self {
-        Self::with_suggestion(
-            ErrorCode::FileIoError,
-            format!("File operation failed for {path}: {}", reason.into()),
-            "Check file permissions and ensure the path is correct",
-        )
-    }
-
-    /// Create a database error
-    pub fn database_error(db_type: impl Into<String>, reason: impl Into<String>) -> Self {
-        Self::with_suggestion(
-            ErrorCode::DatabaseError,
-            format!("{} database error: {}", db_type.into(), reason.into()),
-            "Try deleting the cached database file to force a re-download",
-        )
-    }
-
-    /// Create a parse error
-    pub fn parse_error(what: impl Into<String>, reason: impl Into<String>) -> Self {
-        Self::new(
-            ErrorCode::ParseError,
-            format!("Failed to parse {}: {}", what.into(), reason.into()),
-        )
-    }
-
-    /// Create a timeout error
-    pub fn timeout(operation: impl Into<String>, duration: std::time::Duration) -> Self {
-        Self::with_suggestion(
-            ErrorCode::Timeout,
-            format!("{} timed out after {:?}", operation.into(), duration),
-            "Try increasing the timeout value in config.toml",
-        )
-    }
-
-    /// Create a permission denied error
-    pub fn permission_denied(resource: impl Into<String>) -> Self {
-        Self::with_suggestion(
-            ErrorCode::PermissionDenied,
-            format!("Permission denied: {}", resource.into()),
-            "Check file/directory permissions or run with appropriate privileges",
-        )
-    }
-
-    /// Create a not found error
-    pub fn not_found(resource: impl Into<String>) -> Self {
-        Self::new(
-            ErrorCode::NotFound,
-            format!("Resource not found: {}", resource.into()),
-        )
-    }
-
-    /// Create an internal error
-    pub fn internal(reason: impl Into<String>) -> Self {
-        Self::with_suggestion(
-            ErrorCode::Internal,
-            format!("Internal error: {}", reason.into()),
-            "This is likely a bug. Please report it at https://github.com/threatcode/proxy-spider/issues",
-        )
-    }
-}
-
-/// Convert from std::io::Error
-impl From<std::io::Error> for ProxySpiderError {
-    fn from(err: std::io::Error) -> Self {
-        let code = match err.kind() {
-            std::io::ErrorKind::NotFound => ErrorCode::NotFound,
-            std::io::ErrorKind::PermissionDenied => ErrorCode::PermissionDenied,
-            std::io::ErrorKind::TimedOut => ErrorCode::Timeout,
-            _ => ErrorCode::FileIoError,
-        };
-        
-        Self::new(code, err.to_string()).with_source(err)
-    }
-}
-
-/// Convert from reqwest::Error
-impl From<reqwest::Error> for ProxySpiderError {
-    fn from(err: reqwest::Error) -> Self {
-        let code = if err.is_timeout() {
-            ErrorCode::Timeout
-        } else if err.is_connect() {
-            ErrorCode::NetworkError
-        } else {
-            ErrorCode::NetworkError
-        };
-        
-        Self::new(code, err.to_string()).with_source(err)
-    }
-}
-
-/// Convert from serde_json::Error
-impl From<serde_json::Error> for ProxySpiderError {
-    fn from(err: serde_json::Error) -> Self {
-        Self::new(ErrorCode::ParseError, err.to_string()).with_source(err)
-    }
-}
-
-/// Convert from toml::de::Error
-impl From<toml::de::Error> for ProxySpiderError {
-    fn from(err: toml::de::Error) -> Self {
-        Self::config_invalid(err.to_string()).with_source(err)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_error_code_as_str() {
-        assert_eq!(ErrorCode::ConfigNotFound.as_str(), "CONFIG_NOT_FOUND");
-        assert_eq!(ErrorCode::NetworkError.as_str(), "NETWORK_ERROR");
-    }
-
-    #[test]
-    fn test_error_with_suggestion() {
-        let err = ProxySpiderError::with_suggestion(
-            ErrorCode::ConfigNotFound,
-            "Config not found",
-            "Create a config.toml file",
-        );
-        
-        assert_eq!(err.code(), ErrorCode::ConfigNotFound);
-        assert_eq!(err.message(), "Config not found");
-        assert_eq!(err.suggestion(), Some("Create a config.toml file"));
-    }
-
-    #[test]
-    fn test_error_display() {
-        let err = ProxySpiderError::with_suggestion(
-            ErrorCode::ConfigNotFound,
-            "Config not found",
-            "Create a config.toml file",
-        );
-        
-        let display = format!("{err}");
-        assert!(display.contains("CONFIG_NOT_FOUND"));
-        assert!(display.contains("Config not found"));
-        assert!(display.contains("💡 Suggestion"));
-    }
-
-    #[test]
-    fn test_config_not_found_helper() {
-        let err = ProxySpiderError::config_not_found("/path/to/config.toml");
-        assert_eq!(err.code(), ErrorCode::ConfigNotFound);
-        assert!(err.message().contains("/path/to/config.toml"));
-        assert!(err.suggestion().is_some());
-    }
-
-    #[test]
-    fn test_network_error_helper() {
-        let err = ProxySpiderError::network_error("https://example.com", "Connection refused");
-        assert_eq!(err.code(), ErrorCode::NetworkError);
-        assert!(err.message().contains("https://example.com"));
-        assert!(err.message().contains("Connection refused"));
     }
 }

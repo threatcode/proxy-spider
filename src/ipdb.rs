@@ -1,3 +1,8 @@
+//! IP database management (GeoIP and ASN).
+//!
+//! This module handles downloading, caching, and opening MaxMind database files
+//! used for enriching proxy data with geographic and network information.
+
 use std::{io, path::PathBuf};
 
 use color_eyre::eyre::{WrapErr as _, eyre};
@@ -7,9 +12,12 @@ use tokio::io::AsyncWriteExt as _;
 use crate::event::{AppEvent, Event};
 use crate::{fs::get_cache_path, utils::is_docker};
 
+/// Supported IP database types.
 #[derive(Clone, Copy)]
 pub enum DbType {
+    /// Autonomous System Number database.
     Asn,
+    /// Geolocation database.
     Geo,
 }
 
@@ -124,6 +132,11 @@ impl DbType {
         }
     }
 
+    /// Downloads the latest version of the database if it's not already cached.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the download fails or if the file cannot be saved.
     pub async fn download(
         self,
         http_client: reqwest_middleware::ClientWithMiddleware,
@@ -214,6 +227,11 @@ impl DbType {
         }
     }
 
+    /// Opens the database file using memory mapping.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be opened or if memory mapping fails.
     pub async fn open_mmap(
         self,
     ) -> crate::Result<maxminddb::Reader<maxminddb::Mmap>> {

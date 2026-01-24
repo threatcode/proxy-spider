@@ -3,8 +3,6 @@
 //! Provides comprehensive validation for configuration values to catch errors early
 //! and provide helpful feedback to users.
 
-
-
 use url::Url;
 
 use crate::raw_config::RawConfig;
@@ -19,11 +17,7 @@ pub struct ValidationError {
 
 impl ValidationError {
     pub fn new(field: impl Into<String>, reason: impl Into<String>) -> Self {
-        Self {
-            field: field.into(),
-            reason: reason.into(),
-            suggestion: None,
-        }
+        Self { field: field.into(), reason: reason.into(), suggestion: None }
     }
 
     #[must_use]
@@ -67,11 +61,7 @@ pub fn validate_config(config: &RawConfig) -> ValidationResult {
         errors.append(&mut e);
     }
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(errors)
-    }
+    if errors.is_empty() { Ok(()) } else { Err(errors) }
 }
 
 /// Validate scraping configuration
@@ -93,7 +83,9 @@ fn validate_scraping_config(config: &RawConfig) -> ValidationResult {
                 "scraping.timeout",
                 "Timeout is very high (>300s)",
             )
-            .with_suggestion("Consider using a lower timeout to avoid long waits"),
+            .with_suggestion(
+                "Consider using a lower timeout to avoid long waits",
+            ),
         );
     }
 
@@ -120,8 +112,11 @@ fn validate_scraping_config(config: &RawConfig) -> ValidationResult {
         if let Some(proxy_url) = &config.scraping.proxy {
             if let Err(e) = validate_proxy_url(proxy_url) {
                 errors.push(
-                    ValidationError::new("scraping.proxy", format!("Invalid proxy URL: {e}"))
-                        .with_suggestion("Use format: protocol://host:port"),
+                    ValidationError::new(
+                        "scraping.proxy",
+                        format!("Invalid proxy URL: {e}"),
+                    )
+                    .with_suggestion("Use format: protocol://host:port"),
                 );
             }
         }
@@ -219,11 +214,7 @@ fn validate_scraping_config(config: &RawConfig) -> ValidationResult {
         }
     }
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(errors)
-    }
+    if errors.is_empty() { Ok(()) } else { Err(errors) }
 }
 
 /// Validate checking configuration
@@ -234,8 +225,11 @@ fn validate_checking_config(config: &RawConfig) -> ValidationResult {
     if let Some(check_url) = &config.checking.check_url {
         if let Err(e) = validate_check_url(check_url) {
             errors.push(
-                ValidationError::new("checking.check_url", format!("Invalid check URL: {e}"))
-                    .with_suggestion("Use a valid HTTP/HTTPS URL"),
+                ValidationError::new(
+                    "checking.check_url",
+                    format!("Invalid check URL: {e}"),
+                )
+                .with_suggestion("Use a valid HTTP/HTTPS URL"),
             );
         }
     }
@@ -276,7 +270,9 @@ fn validate_checking_config(config: &RawConfig) -> ValidationResult {
                 "checking.timeout",
                 "Timeout is very high (>300s)",
             )
-            .with_suggestion("Consider using a lower timeout for faster checking"),
+            .with_suggestion(
+                "Consider using a lower timeout for faster checking",
+            ),
         );
     }
 
@@ -309,11 +305,7 @@ fn validate_checking_config(config: &RawConfig) -> ValidationResult {
         );
     }
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(errors)
-    }
+    if errors.is_empty() { Ok(()) } else { Err(errors) }
 }
 
 /// Validate output configuration
@@ -339,11 +331,7 @@ fn validate_output_config(config: &RawConfig) -> ValidationResult {
         );
     }
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(errors)
-    }
+    if errors.is_empty() { Ok(()) } else { Err(errors) }
 }
 
 /// Validate a proxy URL
@@ -380,14 +368,16 @@ fn validate_check_url(url: &Url) -> Result<(), String> {
     }
 
     if url.host_str().is_none() {
-        return Err("Check URL must have a host".to_string());
+        return Err("Check URL must have a host".to_owned());
     }
 
     Ok(())
 }
 
 /// Validate a source URL (can be file:// or http(s)://)
-fn validate_source_url(source: &crate::raw_config::SourceConfig) -> Result<(), String> {
+fn validate_source_url(
+    source: &crate::raw_config::SourceConfig,
+) -> Result<(), String> {
     let url_str = match source {
         crate::raw_config::SourceConfig::Simple(url) => url,
         crate::raw_config::SourceConfig::Detailed { url, .. } => url,
@@ -449,12 +439,21 @@ mod tests {
             output: crate::raw_config::OutputConfig {
                 path: std::path::PathBuf::from("./out"),
                 sort_by_speed: true,
-                txt: crate::raw_config::TxtOutputConfig { enabled: true },
+                txt: crate::raw_config::TxtOutputConfig {
+                    enabled: true,
+                    format: None,
+                },
                 json: crate::raw_config::JsonOutputConfig {
                     enabled: false,
                     include_asn: false,
                     include_geolocation: false,
                 },
+            },
+            server: crate::raw_config::ServerConfig {
+                enabled: false,
+                bind_address: "127.0.0.1".to_string(),
+                port: 8080,
+                tor_isolation: false,
             },
         }
     }
@@ -469,7 +468,7 @@ mod tests {
     fn test_invalid_timeout() {
         let mut config = create_minimal_valid_config();
         config.scraping.timeout = -1.0;
-        
+
         let result = validate_config(&config);
         assert!(result.is_err());
         let errors = result.unwrap_err();
@@ -480,7 +479,7 @@ mod tests {
     fn test_no_enabled_protocols() {
         let mut config = create_minimal_valid_config();
         config.scraping.http.enabled = false;
-        
+
         let result = validate_config(&config);
         assert!(result.is_err());
     }
@@ -490,7 +489,7 @@ mod tests {
         let mut config = create_minimal_valid_config();
         config.output.txt.enabled = false;
         config.output.json.enabled = false;
-        
+
         let result = validate_config(&config);
         assert!(result.is_err());
     }

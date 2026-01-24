@@ -1,3 +1,8 @@
+//! HTTP client utilities and middleware.
+//!
+//! This module provides functions for creating configured `reqwest` clients
+//! and implements a custom [`RetryMiddleware`] for handling transient network errors.
+
 use std::{
     io,
     sync::Arc,
@@ -19,9 +24,12 @@ static RETRY_STATUSES: &[reqwest::StatusCode] = &[
     reqwest::StatusCode::GATEWAY_TIMEOUT,
 ];
 
+/// Basic authentication credentials.
 #[derive(Clone, serde::Deserialize)]
 pub struct BasicAuth {
+    /// The username for authentication.
     pub username: String,
+    /// The optional password for authentication.
     pub password: Option<String>,
 }
 
@@ -69,6 +77,7 @@ fn calculate_retry_timeout(
     Some(base.mul_f64(jitter))
 }
 
+/// Middleware that automatically retries failed requests based on status codes and delays.
 pub struct RetryMiddleware;
 
 #[async_trait::async_trait]
@@ -123,6 +132,11 @@ impl reqwest_middleware::Middleware for RetryMiddleware {
     }
 }
 
+/// Creates a new `reqwest` client with middleware and DNS resolver.
+///
+/// # Errors
+///
+/// Returns an error if the client cannot be built.
 pub fn create_client<R: reqwest::dns::Resolve + 'static>(
     config: &Config,
     dns_resolver: Arc<R>,

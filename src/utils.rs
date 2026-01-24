@@ -1,4 +1,8 @@
+//! General utility functions and traits.
+
+/// Trait for joining iterators of items into a `CompactString`.
 pub trait CompactStrJoin {
+    /// Joins the items into a `CompactString` using the given separator.
     fn join_compact_str(self, sep: &str) -> compact_str::CompactString;
 }
 
@@ -20,12 +24,14 @@ where
             // But Display trait works with fmt::Write for CompactString if implemented or manually pushed
             // CompactString implements fmt::Write
             use std::fmt::Write as _;
-            write!(s, "{item}").expect("fmt::Write should not fail for CompactString");
+            write!(s, "{item}")
+                .expect("fmt::Write should not fail for CompactString");
         }
         s
     }
 }
 
+/// Returns true if the application is running inside a Docker container.
 pub async fn is_docker() -> bool {
     #[cfg(target_os = "linux")]
     {
@@ -44,6 +50,7 @@ pub async fn is_docker() -> bool {
     }
 }
 
+/// Formats a `color_eyre` error into a readable string.
 pub fn pretty_error(e: &crate::Error) -> compact_str::CompactString {
     e.chain().join_compact_str(" \u{2192} ")
 }

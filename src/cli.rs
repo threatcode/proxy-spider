@@ -1,6 +1,9 @@
 use clap::Parser;
 use std::path::PathBuf;
 
+use crate::config::Profile;
+use crate::proxy::AnonymityLevel;
+
 #[derive(Parser, Debug)]
 #[command(name = "proxy-spider", version, about = "Proxy server and checker", long_about = None)]
 pub struct Cli {
@@ -74,6 +77,30 @@ pub struct Cli {
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 
+    /// Custom output format for checked proxies (e.g., "{{protocol}}://{{host}}:{{port}}").
+    #[arg(long, value_name = "FORMAT")]
+    pub output_format: Option<String>,
+
+    /// Filter by minimum anonymity level (transparent, anonymous, elite).
+    #[arg(long, value_enum)]
+    pub min_anonymity: Option<AnonymityLevel>,
+
+    /// Filter by maximum latency (e.g., "500ms", "0.5s", "500").
+    #[arg(long, value_name = "LATENCY")]
+    pub max_latency: Option<String>,
+
+    /// Sort proxies by quality score (0-100).
+    #[arg(long)]
+    pub rank: bool,
+
+    /// Limit output to top N proxies (requires --rank or --profile).
+    #[arg(long, value_name = "N")]
+    pub top: Option<usize>,
+
+    /// Use a predefined selector profile (scraping, stealth, speed).
+    #[arg(long, value_enum)]
+    pub profile: Option<Profile>,
+
     /// Update proxy-spider to the latest stable version.
     #[arg(short, long)]
     pub update: bool,
@@ -97,21 +124,21 @@ impl Cli {
         }
         // Timeout
         if let Some(ref timeout_str) = self.timeout {
-             if let Ok(duration) = humantime::parse_duration(timeout_str) {
-                 config.checking.timeout = duration;
-                 config.scraping.timeout = duration;
-                 config.server.timeout = duration;
-             } else {
-                 // Try parsing strictly as seconds (f64) if humantime fails (fallback)
-                 if let Ok(secs) = timeout_str.parse::<f64>() {
-                     let duration = std::time::Duration::from_secs_f64(secs);
-                     config.checking.timeout = duration;
-                     config.scraping.timeout = duration;
-                     config.server.timeout = duration;
-                 } else {
-                     tracing::warn!("Failed to parse timeout: {}", timeout_str);
-                 }
-             }
+            if let Ok(duration) = humantime::parse_duration(timeout_str) {
+                config.checking.timeout = duration;
+                config.scraping.timeout = duration;
+                config.server.timeout = duration;
+            } else {
+                // Try parsing strictly as seconds (f64) if humantime fails (fallback)
+                if let Ok(secs) = timeout_str.parse::<f64>() {
+                    let duration = std::time::Duration::from_secs_f64(secs);
+                    config.checking.timeout = duration;
+                    config.scraping.timeout = duration;
+                    config.server.timeout = duration;
+                } else {
+                    tracing::warn!("Failed to parse timeout: {}", timeout_str);
+                }
+            }
         }
 
         // Rotation Method
@@ -124,14 +151,46 @@ impl Cli {
         config.server.max_errors = self.max_errors;
         config.server.max_redirs = self.max_redirs;
         config.server.max_retries = self.max_retries;
-        // Country Filter
         if let Some(ref cc) = self.only_cc {
-            config.server.country_filter = Some(cc.split(',').map(|s| s.trim().to_uppercase()).collect());
+            let cc_vec: Vec<String> =
+                cc.split(',').map(|s| s.trim().to_uppercase()).collect();
+            config.server.country_filter = Some(cc_vec.clone());
+            config.output.filters.only_cc = Some(cc_vec);
         }
         config.server.sync = self.sync;
         config.server.verbose = self.verbose;
         if let Some(ref output) = self.output {
             config.server.output = Some(output.clone());
+        }
+        if let Some(ref format) = self.output_format {
+            config.output.txt.format = Some(format.clone());
+        }
+
+        // Ranking and Profiles
+        config.output.rank = self.rank;
+        config.output.top = self.top;
+        config.output.profile = self.profile;
+
+        if let Some(profile) = self.profile {
+            profile.apply(&mut config.output.filters);
+        }
+
+        // Output Filters
+        if let Some(min_anon) = self.min_anonymity {
+            config.output.filters.min_anonymity = Some(min_anon);
+        }
+        if let Some(ref latency_str) = self.max_latency {
+            if let Ok(duration) = humantime::parse_duration(latency_str) {
+                config.output.filters.max_latency = Some(duration);
+            } else if let Ok(secs) = latency_str.parse::<f64>() {
+                config.output.filters.max_latency =
+                    Some(std::time::Duration::from_secs_f64(secs));
+            } else if let Ok(ms) = latency_str.parse::<u64>() {
+                config.output.filters.max_latency =
+                    Some(std::time::Duration::from_millis(ms));
+            } else {
+                tracing::warn!("Failed to parse max-latency: {}", latency_str);
+            }
         }
     }
 }
