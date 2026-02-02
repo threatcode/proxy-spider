@@ -8,7 +8,7 @@ use crate::event::{AppEvent, Event};
 use crate::{
     HashSet,
     config::{Config, Source},
-    parsers::PROXY_REGEX,
+    parsers::{PROXY_REGEX, expand_cidr_ranges},
     proxy::{Proxy, ProxyType},
     utils::pretty_error,
 };
@@ -68,12 +68,17 @@ async fn scrape_one(
         }
     };
 
+    // Expand CIDR ranges to individual IP:port entries
+    let expanded_text = expand_cidr_ranges(&text);
+
     #[cfg(feature = "tui")]
     let mut seen_protocols = HashSet::new();
 
     let mut new_proxies = HashSet::new();
 
-    for maybe_capture in PROXY_REGEX.captures_iter(&text) {
+    for (_, maybe_capture) in
+        PROXY_REGEX.captures_iter(&expanded_text).enumerate()
+    {
         if config.scraping.max_proxies_per_source != 0
             && new_proxies.len() >= config.scraping.max_proxies_per_source
         {
@@ -121,7 +126,7 @@ async fn scrape_one(
     }
 
     drop(config);
-    drop(text);
+    drop(expanded_text);
 
     if new_proxies.is_empty() {
         tracing::warn!("{}: no proxies found", source.url);
