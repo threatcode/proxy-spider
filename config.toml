@@ -97,6 +97,7 @@ urls = [
     "https://raw.githubusercontent.com/roosterkid/openproxylist/refs/heads/main/HTTPS_RAW.txt",
     "https://raw.githubusercontent.com/sunny9577/proxy-scraper/refs/heads/master/generated/http_proxies.txt",
     "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/refs/heads/master/http.txt",
+    "https://rcloak.com/api/proxies/raw?protocol=all",
 ]
 
 [scraping.socks4]
